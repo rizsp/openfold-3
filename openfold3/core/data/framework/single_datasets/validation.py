@@ -267,7 +267,7 @@ class ValidationPDBDataset(BaseOF3Dataset):
         # Per-chain maps
         ab_ag_type_to_chain_id = {t: [] for t in AB_AG_CHAIN_TYPES}
         for chain_id, chain_data in structure_entry.chains.items():
-            sabdab_annotation = chain_data.get("sabdab_annotation")
+            sabdab_annotation = chain_data.sabdab_annotation
             if sabdab_annotation:
                 ab_ag_type_to_chain_id[sabdab_annotation].append(int(chain_id))
         # Per-interface maps
@@ -276,8 +276,8 @@ class ValidationPDBDataset(BaseOF3Dataset):
             chain_id_i, chain_id_j = chain_id_pair.split("_")
             chain_data_i = structure_entry.chains[chain_id_i]
             chain_data_j = structure_entry.chains[chain_id_j]
-            sabdab_annotation_i = chain_data_i.get("sabdab_annotation")
-            sabdab_annotation_j = chain_data_j.get("sabdab_annotation")
+            sabdab_annotation_i = chain_data_i.sabdab_annotation
+            sabdab_annotation_j = chain_data_j.sabdab_annotation
             if sabdab_annotation_i and sabdab_annotation_j:
                 if (
                     sabdab_annotation_i,
