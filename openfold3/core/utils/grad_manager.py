@@ -110,7 +110,7 @@ class PerSampleGradManager:
         and adds it to the internal gradient accumulator.
 
         This should be called after self.manual_backward(loss),
-        inside of a self.no_sync() context.
+        inside of a self.trainer.model.no_sync() context.
         """
         # Clip the single-sample grads
         self._clip_grads()

@@ -383,8 +383,20 @@ class TrainingExperimentRunner(ExperimentRunner):
                 self.model_config.settings.manual_optimization.accumulate_grad_batches
             )
             self.data_module_config.epoch_len = (
-                accum_grad_batches * self.data_module_config.epoch_len
+                self.data_module_config.epoch_len * accum_grad_batches
             )
+
+            self.pl_trainer_args.log_every_n_steps = (
+                self.pl_trainer_args.log_every_n_steps * accum_grad_batches
+            )
+
+            # Disable the `LearningRateMonitor` callback, logging is handled
+            # manually in the training step
+            if self.logging_config.log_lr and self.use_wandb:
+                self.model_config.update(
+                    {"settings": {"manual_optimization": {"log_lr": True}}}
+                )
+                self.logging_config.log_lr = False
 
         else:
             # If not doing per-sample grad clipping, set the clipping value in

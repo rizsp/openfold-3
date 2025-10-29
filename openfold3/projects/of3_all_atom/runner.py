@@ -85,9 +85,10 @@ class OpenFold3AllAtom(ModelRunner):
             self.grad_manager = PerSampleGradManager(
                 gradient_clip_val=model_config.settings.gradient_clipping.clip_val,
                 accumulate_grad_batches=model_config.settings.manual_optimization.accumulate_grad_batches,
-                log_grad_norm=model_config.settings.debug.log_grad_norm,
+                log_grad_norm=model_config.settings.manual_optimization.log_grad_norm,
             )
             self.automatic_optimization = False
+            self.log_lr = model_config.settings.manual_optimization.log_lr
 
     def setup(self, stage: str):
         # Setup metrics
@@ -273,7 +274,9 @@ class OpenFold3AllAtom(ModelRunner):
 
             return metrics
 
-    def _log(self, loss_breakdown, batch, outputs, train=True):
+    def _log(
+        self, loss_breakdown, batch, outputs, train=True, log_train_step_metrics=True
+    ):
         phase = "train" if train else "val"
 
         metrics = self._get_metrics(batch, outputs, train=train)
@@ -292,7 +295,7 @@ class OpenFold3AllAtom(ModelRunner):
             )
 
             # Only log steps for training
-            if train:
+            if train and log_train_step_metrics:
                 self.log(
                     metric_log_name,
                     indiv_loss,
@@ -315,7 +318,7 @@ class OpenFold3AllAtom(ModelRunner):
             )
 
             # Only log steps for training
-            if train:
+            if train and log_train_step_metrics:
                 self.log(
                     f"{metric_log_name}_step",
                     metric_value,
@@ -402,8 +405,50 @@ class OpenFold3AllAtom(ModelRunner):
                 # Zero the grad accumulator
                 self.grad_manager.reset_accumulator()
 
+                # Log LR and step metrics only after the optimizer step
+                # to mimic logging behavior when using automatic optimization
                 if self.logger is not None:
-                    self._log(loss_breakdown, batch, outputs)
+                    if self.log_lr:
+                        self.log(
+                            "AlphaFoldLRScheduler",
+                            opt.param_groups[0]["lr"],
+                            on_step=True,
+                            on_epoch=False,
+                            logger=True,
+                            sync_dist=False,
+                        )
+
+                    self._log(
+                        loss_breakdown,
+                        batch,
+                        outputs,
+                        train=True,
+                        log_train_step_metrics=True,
+                    )
+
+                    # Extremely dumb workaround for PL step logging issues. Avoids using
+                    # `self.trainer.fit_loop.epoch_loop._batches_that_stepped` if this
+                    # metric exists.
+                    # TODO: Consider just using self.logger.log_metrics()
+                    #  instead and just bypass PL self.log() entirely.
+                    self.log(
+                        "step",
+                        float(self.global_step),
+                        on_step=True,
+                        on_epoch=False,
+                        logger=True,
+                        sync_dist=False,
+                    )
+
+            elif self.logger is not None:
+                # Always update epoch metrics
+                self._log(
+                    loss_breakdown,
+                    batch,
+                    outputs,
+                    train=True,
+                    log_train_step_metrics=False,
+                )
 
         except Exception:
             logger.exception(
@@ -600,9 +645,7 @@ class OpenFold3AllAtom(ModelRunner):
             with context:
                 # NOTE: This out-of-schedule logging might interact a bit weirdly with
                 # the WandB Step, so always plot against trainer/global_step
-                self.logger.log_metrics(
-                    single_transition_grads, step=self.trainer.global_step
-                )
+                self.logger.log_metrics(single_transition_grads, step=self.global_step)
 
     def _log_epoch_metrics(
         self, metrics: MetricCollection, compute_model_selection: bool = False
