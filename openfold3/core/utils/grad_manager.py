@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from collections.abc import Iterable
 
 import pytorch_lightning as pl
 import torch
@@ -23,6 +24,35 @@ from torchmetrics import MaxMetric, MeanMetric
 from openfold3.core.utils.tensor_utils import tensor_tree_map
 
 logger = logging.getLogger(__name__)
+
+
+@torch.no_grad()
+def compute_global_norm(
+    parameters: torch.Tensor | Iterable[torch.Tensor],
+) -> [torch.Tensor, list]:
+    """
+    Calculates the global norm of all parameters that have gradients.
+    Args:
+        parameters (Iterable[Tensor] or Tensor): an iterable of Tensors or a
+            single Tensor that will have gradients for norm calculation.
+    Returns:
+        global_norm (torch.Tensor): The scalar global norm.
+        params_with_grad (list): The list of parameters that have gradients.
+    """
+    params_with_grad = [p for p in parameters if p.grad is not None]
+
+    if not params_with_grad:
+        device = next(iter(parameters)).device
+        return torch.tensor(0.0, device=device), []
+
+    # Calculate the total norm of all parameter gradients
+    per_tensor_norms = [
+        torch.linalg.vector_norm(p.grad.float(), ord=2) for p in params_with_grad
+    ]
+
+    global_norm = torch.linalg.vector_norm(torch.stack(per_tensor_norms), ord=2)
+
+    return global_norm, params_with_grad
 
 
 class PerSampleGradManager:
@@ -97,31 +127,6 @@ class PerSampleGradManager:
             )
 
     @torch.no_grad()
-    def _compute_global_norm(self) -> [torch.Tensor, list]:
-        """
-        Calculates the global norm of all parameters that have gradients.
-
-        Returns:
-            global_norm (torch.Tensor): The scalar global norm.
-            params_with_grad (list): The list of parameters that have gradients.
-        """
-        params_with_grad = [
-            p for p in self._params_to_update.values() if p.grad is not None
-        ]
-
-        if not params_with_grad:
-            return torch.tensor(0.0, device=self.device), []
-
-        # Calculate the total norm of all parameter gradients
-        per_tensor_norms = [
-            torch.linalg.vector_norm(p.grad.float(), ord=2) for p in params_with_grad
-        ]
-
-        global_norm = torch.linalg.vector_norm(torch.stack(per_tensor_norms), ord=2)
-
-        return global_norm, params_with_grad
-
-    @torch.no_grad()
     def _clip_grads(self, logging_info: dict | None = None):
         """Clips the gradients currently stored in self._model.parameters()"""
 
@@ -129,7 +134,9 @@ class PerSampleGradManager:
         if self.max_grad_norm is None:
             return
 
-        global_norm, params_with_grad = self._compute_global_norm()
+        global_norm, params_with_grad = compute_global_norm(
+            parameters=self._params_to_update.values()
+        )
 
         if not params_with_grad:
             return
@@ -244,7 +251,9 @@ class PerSampleGradManager:
         if not self.log_grad_norm or self._logger is None:
             return
 
-        global_norm, params_with_grad = self._compute_global_norm()
+        global_norm, params_with_grad = compute_global_norm(
+            parameters=self._params_to_update.values()
+        )
 
         if not params_with_grad:
             return

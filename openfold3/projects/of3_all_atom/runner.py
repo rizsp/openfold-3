@@ -38,7 +38,7 @@ from openfold3.core.metrics.validation_all_atom import (
     get_metrics_chunked,
 )
 from openfold3.core.runners.model_runner import ModelRunner
-from openfold3.core.utils.grad_manager import PerSampleGradManager
+from openfold3.core.utils.grad_manager import PerSampleGradManager, compute_global_norm
 from openfold3.core.utils.lr_schedulers import AlphaFoldLRScheduler
 from openfold3.core.utils.tensor_utils import tensor_tree_map
 from openfold3.core.utils.timing import PerformanceTimer
@@ -84,7 +84,7 @@ class OpenFold3AllAtom(ModelRunner):
             self.grad_manager = PerSampleGradManager(
                 gradient_clip_val=model_config.settings.gradient_clipping.clip_val,
                 accumulate_grad_batches=model_config.settings.manual_optimization.accumulate_grad_batches,
-                log_grad_norm=model_config.settings.manual_optimization.log_grad_norm,
+                log_grad_norm=model_config.settings.debug.log_grad_norm,
             )
             self.automatic_optimization = False
             self.log_lr = model_config.settings.manual_optimization.log_lr
@@ -568,19 +568,28 @@ class OpenFold3AllAtom(ModelRunner):
         self.model.load_state_dict(self.ema.state_dict()["params"])
 
     def on_before_optimizer_step(self, *args, **kwargs):
-        """Logs the single-transition layer linear_out gradients.
+        """
+        Logs unclipped grad norm and gradients for the single-transition
+        linear_out layers. This logging can be enabled in config.settings.debug.
 
         These gradients can be associated with instabilities, so we're logging them on
         every single step (bypassing log_every_n_steps) for more accurate monitoring.
         """
         debug_settings = self.config.settings.debug
-        should_log_extra_metrics = debug_settings.log_extra_grad_metrics
-        has_frozen_params = self.config.settings.train_confidence_only
 
-        if has_frozen_params or not should_log_extra_metrics:
+        # Transition layers included in this logging are frozen when
+        # training confidence only
+        should_log_extra_metrics = (
+            False
+            if self.config.settings.train_confidence_only
+            else debug_settings.log_extra_grad_metrics
+        )
+        should_log_grad_norm = debug_settings.log_grad_norm
+
+        if not should_log_extra_metrics and not should_log_grad_norm:
             return
 
-        single_transition_grads = {}
+        extra_grad_metrics = {}
 
         # Only rank zero will actually log the gradients
         log_grad_metrics = self.trainer.is_global_zero and self.logger is not None
@@ -602,27 +611,36 @@ class OpenFold3AllAtom(ModelRunner):
         )
 
         with context:
-            for idx in block_idxs:
-                block = self.model.pairformer_stack.blocks[idx]
-                param = block.single_transition.linear_out.weight
+            if should_log_extra_metrics:
+                for idx in block_idxs:
+                    block = self.model.pairformer_stack.blocks[idx]
+                    param = block.single_transition.linear_out.weight
 
-                if isinstance(self.trainer.strategy, DeepSpeedStrategy):
-                    # Needs to be called on every rank to avoid hanging
-                    # https://github.com/deepspeedai/DeepSpeed/issues/7117#issuecomment-2717974187
-                    grad = deepspeed.utils.safe_get_full_grad(param)
-                else:
-                    grad = param.grad
+                    if isinstance(self.trainer.strategy, DeepSpeedStrategy):
+                        # Needs to be called on every rank to avoid hanging
+                        # https://github.com/deepspeedai/DeepSpeed/issues/7117#issuecomment-2717974187
+                        grad = deepspeed.utils.safe_get_full_grad(param)
+                    else:
+                        grad = param.grad
 
-                assert not grad.requires_grad
+                    assert not grad.requires_grad
 
-                if log_grad_metrics:
-                    tag = (
-                        f"extra_gradients/model.pairformer_stack.blocks.{idx}."
-                        "single_transition.linear_out.weight"
-                    )
+                    if log_grad_metrics:
+                        tag = (
+                            f"extra_gradients/model.pairformer_stack.blocks.{idx}."
+                            "single_transition.linear_out.weight"
+                        )
 
-                    single_transition_grads[f"{tag}_norm"] = grad.norm().item()
-                    single_transition_grads[f"{tag}_max"] = grad.abs().max().item()
+                        extra_grad_metrics[f"{tag}_norm"] = grad.norm().item()
+                        extra_grad_metrics[f"{tag}_max"] = grad.abs().max().item()
+
+            if not self.per_sample_grad_clipping and should_log_grad_norm:
+                # Compute global grad norm for per-batch grad clipping
+                # Per sample clipping handles this logging in the grad manager
+                global_norm, _ = compute_global_norm(parameters=self.model.parameters())
+                extra_grad_metrics["extra_gradients/avg_unclipped_grad_norm"] = (
+                    global_norm.item()
+                )
 
         if log_grad_metrics:
             context = (
@@ -633,7 +651,7 @@ class OpenFold3AllAtom(ModelRunner):
             with context:
                 # NOTE: This out-of-schedule logging might interact a bit weirdly with
                 # the WandB Step, so always plot against trainer/global_step
-                self.logger.log_metrics(single_transition_grads, step=self.global_step)
+                self.logger.log_metrics(extra_grad_metrics, step=self.global_step)
 
     def _log_epoch_metrics(
         self, metrics: MetricCollection, compute_model_selection: bool = False
@@ -675,6 +693,25 @@ class OpenFold3AllAtom(ModelRunner):
 
         # Reset metrics for next epoch
         metrics.reset()
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        """Called after optimizer.step(). Gradients are present and clipped."""
+
+        # EMA weight update
+        self.ema.update(self.model)
+
+        # Log the clipped step norm when using automatic optimization
+        should_log_grad_norm = self.config.settings.debug.log_grad_norm
+        if (
+            not self.per_sample_grad_clipping
+            and should_log_grad_norm
+            and self.logger is not None
+        ):
+            global_norm, _ = compute_global_norm(parameters=self.model.parameters())
+            self.logger.log_metrics(
+                {"extra_gradients/avg_clipped_grad_norm": global_norm.item()},
+                step=self.global_step,
+            )
 
     def on_train_epoch_end(self):
         """Log aggregated epoch metrics for training."""
