@@ -130,10 +130,6 @@ class PerSampleGradManager:
     def _clip_grads(self, logging_info: dict | None = None):
         """Clips the gradients currently stored in self._model.parameters()"""
 
-        # Skip clipping if it's disabled
-        if self.max_grad_norm is None:
-            return
-
         global_norm, params_with_grad = compute_global_norm(
             parameters=self._params_to_update.values()
         )
@@ -141,10 +137,14 @@ class PerSampleGradManager:
         if not params_with_grad:
             return
 
-        # Update the metric
+        # Log the metrics even if clipping is disabled
         if self.log_grad_norm:
             self.avg_unclipped_norm_metric.update(global_norm)
             self.max_unclipped_norm_metric.update(global_norm)
+
+        # Skip clipping if it's disabled
+        if self.max_grad_norm is None:
+            return
 
         # Only start logging unclipped grads after warmup
         warning_threshold = self.max_grad_norm * 5.0
@@ -300,16 +300,6 @@ class PerSampleGradManager:
 
         # Sync and average globally
         self._sync_and_average_grads()
-
-    def is_step_ready(self, batch_idx: int) -> bool:
-        """
-        Checks if the optimizer step should be performed.
-        """
-        if self._trainer.is_last_batch:
-            return True
-
-        is_last_step_of_cycle = (batch_idx + 1) % self.accumulate_grad_batches == 0
-        return is_last_step_of_cycle
 
     @torch.no_grad()
     def reset_accumulator(self):

@@ -327,6 +327,19 @@ class OpenFold3AllAtom(ModelRunner):
                     sync_dist=False,
                 )
 
+    def _is_opt_step_ready(self, batch_idx: int) -> bool:
+        """
+        Checks if the optimizer step should be performed.
+        Used in manual mode.
+        """
+        if self.per_sample_grad_clipping:
+            accum_steps = self.grad_manager.accumulate_grad_batches
+        else:
+            accum_steps = self.trainer.accumulate_grad_batches
+
+        is_last_step_of_cycle = (batch_idx + 1) % accum_steps == 0
+        return is_last_step_of_cycle or self.trainer.is_last_batch
+
     def _training_step_manual_clip(self, batch, batch_idx):
         assert len(batch["pdb_id"]) == 1, (
             "Currently only local batch size of 1 per GPU is supported."
@@ -388,7 +401,7 @@ class OpenFold3AllAtom(ModelRunner):
                 self.manual_backward(loss)
                 self.grad_manager.clip_and_accumulate(logging_info=logging_info)
 
-            if self.grad_manager.is_step_ready(batch_idx):
+            if self._is_opt_step_ready(batch_idx):
                 # Average and sync grads
                 self.grad_manager.sync_grads()
 
@@ -697,6 +710,10 @@ class OpenFold3AllAtom(ModelRunner):
     def on_train_batch_end(self, outputs, batch, batch_idx):
         """Called after optimizer.step(). Gradients are present and clipped."""
 
+        # Skip grad accumulation steps
+        if not self._is_opt_step_ready(batch_idx):
+            return
+
         # EMA weight update
         self.ema.update(self.model)
 
@@ -706,11 +723,12 @@ class OpenFold3AllAtom(ModelRunner):
             not self.per_sample_grad_clipping
             and should_log_grad_norm
             and self.logger is not None
+            and self.trainer.global_step > 0
         ):
             global_norm, _ = compute_global_norm(parameters=self.model.parameters())
             self.logger.log_metrics(
                 {"extra_gradients/avg_clipped_grad_norm": global_norm.item()},
-                step=self.global_step,
+                step=self.global_step - 1,  # Shifted wrt per-sample logging
             )
 
     def on_train_epoch_end(self):
