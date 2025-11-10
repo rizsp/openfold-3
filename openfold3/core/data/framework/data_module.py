@@ -221,6 +221,7 @@ class DataModule(pl.LightningDataModule):
                     seed_sequence[3] & 0xFFFFFFFF
                 )  # numpy takes 32-bit seed only
 
+        print(f"Running with initial data seed: {self.data_seed}")
         self.worker_init_function_with_data_seed = worker_init_function_with_data_seed
         self.generator = torch.Generator(device="cpu").manual_seed(self.data_seed)
 
