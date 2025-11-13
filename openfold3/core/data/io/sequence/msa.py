@@ -387,6 +387,8 @@ class MsaSampleParserMapper:
     map_keys: tuple = (
         "chain_id_to_rep_id",
         "chain_id_to_mol_type",
+        "rep_id_to_chain_id",
+        "rep_id_to_mol_type",
         "rep_id_to_main_msa_paths",
         "rep_id_to_paired_msa_paths",
         "rep_id_to_query_seq",
@@ -438,6 +440,8 @@ class MsaSampleParser:
         msa_array_collection = MsaArrayCollection(
             chain_id_to_rep_id=maps.chain_id_to_rep_id,
             chain_id_to_mol_type=maps.chain_id_to_mol_type,
+            rep_id_to_chain_id=maps.rep_id_to_chain_id,
+            rep_id_to_mol_type=maps.rep_id_to_mol_type,
         )
         msa_array_collection.set_state_parsed(
             rep_id_to_query_seq=maps.rep_id_to_query_seq,
@@ -451,7 +455,7 @@ class MsaSampleParser:
         maps = self.create_maps(input=input)
 
         # Parse MSAs for each representative ID
-        self.parse_msas(maps=maps)
+        maps = self.parse_msas(maps=maps)
 
         # Collect data into MsaArrayCollection
         msa_array_collection = self.create_msa_array_collection(maps)
@@ -472,14 +476,22 @@ class MsaSampleParserTrain(MsaSampleParser):
             - chain_id_to_rep_id: dict
                 Maps chain IDs to representative IDs.
             - chain_id_to_mol_type: dict
-                Maps chain IDs to molecule types."""
+                Maps chain IDs to molecule types.
+            - rep_id_to_chain_id: dict
+                Maps representative IDs to an example chain ID.
+            - rep_id_to_mol_type: dict
+                Maps representative IDs to molecule types.
+        """
         maps = MsaSampleParserMapper()
         for chain_id, chain_data in input.msa_chain_data.items():
             if chain_data.molecule_type in self.config.moltypes:
-                maps.chain_id_to_rep_id[chain_id] = (
-                    chain_data.alignment_representative_id
-                )
+                rep_id = chain_data.alignment_representative_id
+                maps.chain_id_to_rep_id[chain_id] = rep_id
                 maps.chain_id_to_mol_type[chain_id] = chain_data.molecule_type
+                if rep_id not in maps.rep_id_to_chain_id:
+                    maps.rep_id_to_chain_id[rep_id] = chain_id
+                if rep_id not in maps.rep_id_to_mol_type:
+                    maps.rep_id_to_mol_type[rep_id] = chain_data.molecule_type
         return maps
 
     def parse_msas(self, maps: MsaSampleParserMapper) -> MsaSampleParserMapper:
@@ -609,6 +621,10 @@ class MsaSampleParserInference(MsaSampleParser):
 
                 maps.chain_id_to_rep_id[chain_id] = rep_id
                 maps.chain_id_to_mol_type[chain_id] = chain_data.molecule_type
+                if (rep_id not in maps.rep_id_to_chain_id) & (len(main_msa_file_paths) > 0):
+                    maps.rep_id_to_chain_id[rep_id] = chain_id
+                if (rep_id not in maps.rep_id_to_mol_type) & (len(main_msa_file_paths) > 0):
+                    maps.rep_id_to_mol_type[rep_id] = chain_data.molecule_type
                 if (rep_id not in maps.rep_id_to_main_msa_paths) & (
                     len(main_msa_file_paths) > 0
                 ):

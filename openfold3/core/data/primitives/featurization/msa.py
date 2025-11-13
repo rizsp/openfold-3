@@ -127,106 +127,10 @@ def calculate_row_counts(
     )
 
 
-def calculate_profile(
-    msa_array: np.ndarray, molecule_type: MoleculeType, chunk_size: int
-) -> np.ndarray:
-    """Calculates the fractions of residue occurences per character per column.
-
-    Args:
-        msa_col (np.ndarray):
-            Columns slice from an MSA array.
-        mol_type (MoleculeType):
-            The molecule type of the MSA.
-
-    Returns:
-        np.ndarray:
-            The counts of residues in the column indexed by the
-            STANDARD_RESIDUES_WITH_GAP_1 alphabet.
-    """
-
-    msa_index = map_str_array_to_idx_array(msa_array, molecule_type)
-
-    n_rows, n_cols = msa_index.shape
-    n_symbols = len(STANDARD_RESIDUES_WITH_GAP_1)
-    counts = np.zeros((n_cols, n_symbols), dtype=int)
-    col_start = 0
-
-    while col_start < n_cols:
-        col_end = min(col_start + chunk_size, n_cols)
-        msa_chunk = msa_index[:, col_start:col_end]
-        block_n_cols = col_end - col_start
-        # Flatten subarray (size = n_rows * block_n_cols)
-        val_indices = msa_chunk.ravel()  # row-major flatten by default
-        # Build local col_indices of the same flattened shape
-        col_indices_local = np.repeat(np.arange(block_n_cols), n_rows)
-        # Now each col in this chunk is offset from the "absolute" col_start, but for
-        # bincount we just care about "relative" indexing from 0...(block_n_cols-1). We
-        # combine into a single 1D array: offset + val Where offset = col_indices_local
-        # * n_symbols That ensures each column in the chunk has a distinct range in the
-        # output
-        to_count_local = col_indices_local * n_symbols + val_indices
-
-        # Bincount for this chunk
-        # We'll have block_n_cols*n_symbols possible bins
-        chunk_counts_1d = np.bincount(
-            to_count_local, minlength=block_n_cols * n_symbols
-        )
-
-        # Reshape into (block_n_cols, n_symbols)
-        chunk_counts_2d = chunk_counts_1d.reshape(block_n_cols, n_symbols)
-
-        # Accumulate into the global array
-        counts[col_start:col_end, :] += chunk_counts_2d
-
-        col_start = col_end
-
-    return counts / n_rows
 
 
-@log_runtime_memory(
-    runtime_dict_key="runtime-msa-feat-precursor-profile-del-mean", multicall=True
-)
-def calculate_profile_del_mean(
-    msa_array_collection: MsaArrayCollection,
-    chain_id: str,
-    msa_profile_chunk_size: int = 1000,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Calculate the profile and mean deletion counts for a chain.
 
-    Args:
-        msa_array_collection (MsaArrayCollection):
-            The processed and pre-featurized collection of MSA arrays.
-        chain_id (str):
-            The chain ID of the chain to calculate the profile and mean deletion counts
-            for.
-        msa_profile_chunk_size (int):
-            The number of columns to simultaneously calculate the MSA profile for.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]:
-            The profile and mean deletion counts for the chain.
-    """
-    if bool(msa_array_collection.row_counts["n_rows_main"][chain_id]):
-        profile = calculate_profile(
-            msa_array_collection.chain_id_to_main_msa[chain_id].msa,
-            msa_array_collection.chain_id_to_mol_type[chain_id],
-            chunk_size=msa_profile_chunk_size,
-        )
-        del_mean = np.mean(
-            msa_array_collection.chain_id_to_main_msa[chain_id].deletion_matrix, axis=0
-        )
-    else:
-        profile = np.zeros(
-            [
-                msa_array_collection.chain_id_to_main_msa[chain_id].msa.shape[1],
-                len(STANDARD_RESIDUES_WITH_GAP_1),
-            ],
-        )
-        del_mean = np.zeros(
-            msa_array_collection.chain_id_to_main_msa[chain_id].msa.shape[1]
-        )
-
-    return profile, del_mean
 
 
 @log_runtime_memory(
@@ -414,10 +318,12 @@ def create_msa_feature_precursor_of3(
 
         # Process each chain
         for chain_id in msa_array_collection.chain_id_to_rep_id:
-            # Calculate profile and del mean for chain across all main columns
-            profile, del_mean = calculate_profile_del_mean(
-                msa_array_collection, chain_id
-            )
+            # MOVED TO SAMPLE PROCESSING CREATE MAIN - HERE JUST EXTRACT FROM COLLECTION
+            # # Calculate profile and del mean for chain across all main columns
+            # profile, del_mean = calculate_profile_del_mean(
+            #     msa_array_collection, chain_id
+            # )
+            profile, del_mean = None, None
 
             # Crop and vertically stack query, paired MSA and main MSA arrays
             msa_array_vstack, _ = crop_vstack_msa_arrays(

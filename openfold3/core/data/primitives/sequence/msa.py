@@ -28,7 +28,7 @@ import pandas as pd
 from openfold3.core.data.primitives.quality_control.logging_utils import (
     log_runtime_memory,
 )
-from openfold3.core.data.resources.residues import MoleculeType
+from openfold3.core.data.resources.residues import STANDARD_RESIDUES_WITH_GAP_1, MoleculeType, map_str_array_to_idx_array
 
 logger = logging.getLogger(__name__)
 
@@ -445,8 +445,8 @@ class MsaArrayCollection:
         3.) prefeaturized state:
             Processed state with the attribute row_counts also populated.
 
-    Attributes _state, chain_id_to_rep_id, chain_id_to_mol_type are populated in both
-    states.
+    Attributes _state, chain_id_to_rep_id, chain_id_to_mol_type, rep_id_to_chain_id and
+    rep_id_to_mol_type are populated in all states.
 
     Attributes:
         _state (str):
@@ -478,7 +478,9 @@ class MsaArrayCollection:
 
     # Core attributes
     chain_id_to_rep_id: dict[str, str]
-    chain_id_to_mol_type: dict[str, str]  # TODO convert to dict[str, MoleculeType]
+    chain_id_to_mol_type: dict[str, MoleculeType]
+    rep_id_to_chain_id: dict[str, str]
+    rep_id_to_mol_type: dict[str, MoleculeType]
     _state: str = "init"
 
     # State parsed attributes
@@ -498,6 +500,8 @@ class MsaArrayCollection:
         default_factory=dict
     )
     chain_id_to_main_msa: dict[str, MsaArray] = dataclasses.field(default_factory=dict)
+    chain_id_to_profile: dict[str, MsaArray] = dataclasses.field(default_factory=dict)
+    chain_id_to_deletion_mean: dict[str, MsaArray] = dataclasses.field(default_factory=dict)
 
     # Prefeaturized attributes
     row_counts: dict[str, int | dict[str, int]] = dataclasses.field(
@@ -517,13 +521,20 @@ class MsaArrayCollection:
         self.chain_id_to_main_msa = {}
 
     def set_state_processed(
-        self, chain_id_to_query_seq, chain_id_to_paired_msa, chain_id_to_main_msa
+        self, 
+        chain_id_to_query_seq, 
+        chain_id_to_paired_msa, 
+        chain_id_to_main_msa,
+        chain_id_to_profile,
+        chain_id_to_deletion_mean,
     ):
         """Set the state to processed."""
         self._state = "processed"
         self.chain_id_to_query_seq = chain_id_to_query_seq
         self.chain_id_to_paired_msa = chain_id_to_paired_msa
         self.chain_id_to_main_msa = chain_id_to_main_msa
+        self.chain_id_to_profile = chain_id_to_profile
+        self.chain_id_to_deletion_mean = chain_id_to_deletion_mean
         self.rep_id_to_query_seq = {}
         self.rep_id_to_paired_msa = {}
         self.rep_id_to_main_msa = {}
@@ -1181,6 +1192,107 @@ def create_paired_from_preprocessed(
     # Map to per-chain
     return expand_paired_msas(msa_array_collection=msa_array_collection)
 
+def calculate_profile(
+    msa_array: np.ndarray, molecule_type: MoleculeType, chunk_size: int
+) -> np.ndarray:
+    """Calculates the fractions of residue occurences per character per column.
+
+    Args:
+        msa_col (np.ndarray):
+            Columns slice from an MSA array.
+        mol_type (MoleculeType):
+            The molecule type of the MSA.
+
+    Returns:
+        np.ndarray:
+            The counts of residues in the column indexed by the
+            STANDARD_RESIDUES_WITH_GAP_1 alphabet.
+    """
+
+    msa_index = map_str_array_to_idx_array(msa_array, molecule_type)
+
+    n_rows, n_cols = msa_index.shape
+    n_symbols = len(STANDARD_RESIDUES_WITH_GAP_1)
+    counts = np.zeros((n_cols, n_symbols), dtype=int)
+    col_start = 0
+
+    while col_start < n_cols:
+        col_end = min(col_start + chunk_size, n_cols)
+        msa_chunk = msa_index[:, col_start:col_end]
+        block_n_cols = col_end - col_start
+        # Flatten subarray (size = n_rows * block_n_cols)
+        val_indices = msa_chunk.ravel()  # row-major flatten by default
+        # Build local col_indices of the same flattened shape
+        col_indices_local = np.repeat(np.arange(block_n_cols), n_rows)
+        # Now each col in this chunk is offset from the "absolute" col_start, but for
+        # bincount we just care about "relative" indexing from 0...(block_n_cols-1). We
+        # combine into a single 1D array: offset + val Where offset = col_indices_local
+        # * n_symbols That ensures each column in the chunk has a distinct range in the
+        # output
+        to_count_local = col_indices_local * n_symbols + val_indices
+
+        # Bincount for this chunk
+        # We'll have block_n_cols*n_symbols possible bins
+        chunk_counts_1d = np.bincount(
+            to_count_local, minlength=block_n_cols * n_symbols
+        )
+
+        # Reshape into (block_n_cols, n_symbols)
+        chunk_counts_2d = chunk_counts_1d.reshape(block_n_cols, n_symbols)
+
+        # Accumulate into the global array
+        counts[col_start:col_end, :] += chunk_counts_2d
+
+        col_start = col_end
+
+    return counts / n_rows
+
+
+@log_runtime_memory(
+    runtime_dict_key="runtime-msa-feat-precursor-profile-del-mean", multicall=True
+)
+def calculate_profile_del_mean(
+    msa_array_collection: MsaArrayCollection,
+    chain_id: str,
+    msa_profile_chunk_size: int = 1000,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Calculate the profile and mean deletion counts for a chain.
+
+    Args:
+        msa_array_collection (MsaArrayCollection):
+            The processed and pre-featurized collection of MSA arrays.
+        chain_id (str):
+            The chain ID of the chain to calculate the profile and mean deletion counts
+            for.
+        msa_profile_chunk_size (int):
+            The number of columns to simultaneously calculate the MSA profile for.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]:
+            The profile and mean deletion counts for the chain.
+    """
+    if bool(msa_array_collection.row_counts["n_rows_main"][chain_id]):
+        profile = calculate_profile(
+            msa_array_collection.chain_id_to_main_msa[chain_id].msa,
+            msa_array_collection.chain_id_to_mol_type[chain_id],
+            chunk_size=msa_profile_chunk_size,
+        )
+        del_mean = np.mean(
+            msa_array_collection.chain_id_to_main_msa[chain_id].deletion_matrix, axis=0
+        )
+    else:
+        profile = np.zeros(
+            [
+                msa_array_collection.chain_id_to_main_msa[chain_id].msa.shape[1],
+                len(STANDARD_RESIDUES_WITH_GAP_1),
+            ],
+        )
+        del_mean = np.zeros(
+            msa_array_collection.chain_id_to_main_msa[chain_id].msa.shape[1]
+        )
+
+    return profile, del_mean
+
 
 @log_runtime_memory(runtime_dict_key="runtime-msa-proc-create-main")
 def create_main(
@@ -1192,7 +1304,8 @@ def create_main(
     """Creates main MSA arrays from non-UniProt MSAs.
 
     Note: this function also removes all sequences from the final main MSA that are
-    present in the cropped paired MSA of the corresponding chain.
+    present in the cropped paired MSA of the corresponding chain. Also creates the
+    profile and deletion mean from the redundant main MSA before subsampling.
 
     Args:
         msa_array_collection (MsaArrayCollection):
@@ -1213,6 +1326,9 @@ def create_main(
     """
     # Iterate over representatives
     rep_main_msas = {}
+    rep_profiles = {}
+    rep_del_means = {}
+
     for rep_id, chain_data in msa_array_collection.rep_id_to_main_msa.items():
         chain_data = msa_array_collection.rep_id_to_main_msa[rep_id]
 
@@ -1228,16 +1344,9 @@ def create_main(
 
         # Get paired MSAs if any and deduplicate
         if len(chain_id_to_paired_msa) > 0:
-            # Create reprepsentative to chain ID mapping
-            seen = set()
-            rep_id_to_chain_id = {
-                value: key
-                for key, value in msa_array_collection.chain_id_to_rep_id.items()
-                if value not in seen and not seen.add(value)
-            }
 
             # The relevant paired MSA for this representative
-            paired_arr = chain_id_to_paired_msa[rep_id_to_chain_id[rep_id]].msa
+            paired_arr = chain_id_to_paired_msa[msa_array_collection.rep_id_to_chain_id[rep_id]].msa
             arr = main_msa_redundant
 
             # 1) Convert each 2D array into a 1D "structured" view of type void This
@@ -1271,6 +1380,9 @@ def create_main(
             deletion_matrix=filtered_deletion[idx, :],
             metadata=pd.DataFrame(),
         )
+
+        # Calculate profile and del mean from the redundant main MSA
+        # TODO
 
     # Reindex dicts from representatives to chain IDs
     main_msas = {}
