@@ -25,9 +25,9 @@ from openfold3.core.data.framework.single_datasets.abstract_single import (
 )
 from openfold3.core.data.framework.single_datasets.base_of3 import (
     BaseOF3Dataset,
-    check_invalid_feature_dict,
 )
 from openfold3.core.data.framework.single_datasets.dataset_utils import (
+    check_invalid_feature_dict,
     pad_to_world_size,
 )
 from openfold3.core.data.primitives.featurization.structure import (
