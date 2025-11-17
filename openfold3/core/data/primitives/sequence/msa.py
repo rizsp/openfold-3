@@ -516,7 +516,7 @@ class MsaArrayCollection:
     chain_id_to_deletion_mean: dict[str, MsaArray] = dataclasses.field(
         default_factory=dict
     )
-    row_counts: MsaRowCounts = MsaRowCounts()
+    row_counts: MsaRowCounts = dataclasses.field(default_factory=MsaRowCounts)
 
     def set_state_parsed(
         self, rep_id_to_query_seq, rep_id_to_paired_msa=None, rep_id_to_main_msa=None
@@ -1432,10 +1432,17 @@ def create_main(
     max_n_rows_main_subsampled = 0
     for chain_id, rep_id in msa_array_collection.chain_id_to_rep_id.items():
         filtered_msa_array = rep_id_to_main_msa[rep_id]
+        # actual number of rows in the unsubsampled main MSA for this chain
         n_rows_main_msa = filtered_msa_array.msa.shape[0]
-        n_rows_main_msa_lim = max_rows - n_rows_paired_subsampled - 1
-        k = generator.integers(1, min(n_rows_main_msa + 1, n_rows_main_msa_lim))
-        idx = generator.choice(n_rows_main_msa, size=k, replace=False)
+        # row upper limit for this main MSA
+        n_rows_main_msa_lim = max(0, max_rows - n_rows_paired_subsampled - 1)
+        # No main MSA or limit exhausted
+        if n_rows_main_msa == 0 or n_rows_main_msa_lim == 0:
+            idx = np.empty((0,), dtype=int)
+        # Subsample otherwise
+        else:
+            k = generator.integers(1, min(n_rows_main_msa, n_rows_main_msa_lim) + 1)
+            idx = generator.choice(n_rows_main_msa, size=k, replace=False)
         if keep_subsampled_order:
             idx.sort()
         main_msa = MsaArray(

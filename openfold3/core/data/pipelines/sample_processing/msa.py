@@ -192,13 +192,15 @@ class MsaSampleProcessorTrain(MsaSampleProcessor):
         """Create main MSAs from MSA arrays."""
         if len(msa_array_collection.rep_id_to_query_seq) > 0:
             # Create main MSA arrays
-            chain_id_to_main_msa = self.main_msa_processor(
-                msa_array_collection=msa_array_collection,
-                chain_id_to_paired_msa=chain_id_to_paired_msa,
+            chain_id_to_main_msa, chain_id_to_profile, chain_id_to_del_mean = (
+                self.main_msa_processor(
+                    msa_array_collection=msa_array_collection,
+                    chain_id_to_paired_msa=chain_id_to_paired_msa,
+                )
             )
         else:
-            chain_id_to_main_msa = {}
-        return chain_id_to_main_msa
+            chain_id_to_main_msa, chain_id_to_profile, chain_id_to_del_mean = {}, {}, {}
+        return chain_id_to_main_msa, chain_id_to_profile, chain_id_to_del_mean
 
 
 class MsaSampleProcessorInference(MsaSampleProcessor):
@@ -266,10 +268,12 @@ class MsaSampleProcessorInference(MsaSampleProcessor):
             & input.use_main_msas
         ):
             # Create main MSA arrays
-            chain_id_to_main_msa = self.main_msa_processor(
-                msa_array_collection=msa_array_collection,
-                chain_id_to_paired_msa=chain_id_to_paired_msa,
+            chain_id_to_main_msa, chain_id_to_profile, chain_id_to_del_mean = (
+                self.main_msa_processor(
+                    msa_array_collection=msa_array_collection,
+                    chain_id_to_paired_msa=chain_id_to_paired_msa,
+                )
             )
         else:
-            chain_id_to_main_msa = {}
-        return chain_id_to_main_msa
+            chain_id_to_main_msa, chain_id_to_profile, chain_id_to_del_mean = {}, {}, {}
+        return chain_id_to_main_msa, chain_id_to_profile, chain_id_to_del_mean
