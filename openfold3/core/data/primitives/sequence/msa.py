@@ -436,10 +436,17 @@ class MsaArray:
 
 
 @dataclasses.dataclass(frozen=False)
+class MsaRowCounts:
+    n_rows_total: int = 0
+    n_rows_paired_subsampled: int = 0
+    n_rows_main_subsampled: dict[str, int] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass(frozen=False)
 class MsaArrayCollection:
     """Class representing a collection MSAs for a single sample.
 
-    This class can be in one of three states:
+    This class can be in one of two states:
         1.) parsed state:
             attributes rep_id_to_query_seq, rep_id_to_paired_msa and rep_id_to_main_msa
             populated after parsing and chain_id_to_query_seq, chain_id_to_paired_msa,
@@ -447,9 +454,7 @@ class MsaArrayCollection:
         2.) processed state:
             attributes rep_id_to_query_seq, rep_id_to_paired_msa and rep_id_to_main_msa
             unpopulated and chain_id_to_query_seq, chain_id_to_paired_msa,
-            chain_id_to_main_msa populated after processing.
-        3.) prefeaturized state:
-            Processed state with the attribute row_counts also populated.
+            chain_id_to_main_msa populated after processing. Also sets row_counts.
 
     Attributes _state, chain_id_to_rep_id, chain_id_to_mol_type, rep_id_to_chain_id and
     rep_id_to_mol_type are populated in all states.
@@ -511,11 +516,7 @@ class MsaArrayCollection:
     chain_id_to_deletion_mean: dict[str, MsaArray] = dataclasses.field(
         default_factory=dict
     )
-
-    # Prefeaturized attributes
-    row_counts: dict[str, int | dict[str, int]] = dataclasses.field(
-        default_factory=dict
-    )
+    row_counts: MsaRowCounts = MsaRowCounts()
 
     def set_state_parsed(
         self, rep_id_to_query_seq, rep_id_to_paired_msa=None, rep_id_to_main_msa=None
@@ -548,16 +549,19 @@ class MsaArrayCollection:
         self.rep_id_to_paired_msa = {}
         self.rep_id_to_main_msa = {}
 
-    def set_state_prefeaturized(
-        self, n_rows, n_rows_paired_subsampled, n_rows_main_subsampled
+    def set_row_counts(
+        self,
+        n_rows_total: int | None = None,
+        n_rows_paired_subsampled: int | None = None,
+        n_rows_main_subsampled: dict | None = None,
     ):
         """Set the state to prefeaturized."""
-        self._state = "prefeaturized"
-        self.row_counts = {
-            "n_rows": n_rows,
-            "n_rows_paired_subsampled": n_rows_paired_subsampled,
-            "n_rows_main_subsampled": n_rows_main_subsampled,
-        }
+        if n_rows_total is not None:
+            self.row_counts.n_rows_total = n_rows_total
+        if n_rows_paired_subsampled is not None:
+            self.row_counts.n_rows_paired_subsampled = n_rows_paired_subsampled
+        if n_rows_main_subsampled is not None:
+            self.row_counts.n_rows_main_subsampled.update(n_rows_main_subsampled)
 
 
 @log_runtime_memory(runtime_dict_key="runtime-msa-proc-homo-mono")
@@ -1207,6 +1211,13 @@ def create_paired(
     msa_array_collection.rep_id_to_paired_msa = paired_msa_per_chain
     chain_id_to_paired_msa = expand_paired_msas(msa_array_collection)
 
+    # Update row counts
+    msa_array_collection.set_row_counts(
+        n_rows_paired_subsampled=next(iter(chain_id_to_paired_msa.values())).msa.shape[
+            0
+        ]
+    )
+
     return chain_id_to_paired_msa
 
 
@@ -1250,7 +1261,10 @@ def create_paired_from_preprocessed(
     msa_array_collection.rep_id_to_paired_msa = processed_prepaired_msas
 
     # Map to per-chain
-    return expand_paired_msas(msa_array_collection=msa_array_collection)
+    chain_id_to_paired_msa = expand_paired_msas(
+        msa_array_collection=msa_array_collection
+    )
+    return chain_id_to_paired_msa
 
 
 def calculate_profile(
@@ -1313,6 +1327,7 @@ def calculate_profile(
 def create_main(
     msa_array_collection: MsaArrayCollection,
     chain_id_to_paired_msa: dict[str, MsaArray],
+    max_rows: int,
     aln_order: list[str],
     keep_subsampled_order: bool,
     generator: Generator | None = None,
@@ -1328,6 +1343,8 @@ def create_main(
             A collection of MsaArrays and chain IDs for a single sample.
         chain_id_to_paired_msa (dict[str, MsaArray]):
             Dict of paired Msa objects per chain.
+        max_rows (int):
+            Maximum number of sequence rows allowed for the MSA vstack of each chain.
         aln_order (list[str]):
             The order in which to concatenate the main MSA arrays vertically. Alignments
             not in this list are not added to the main MSA.
@@ -1410,19 +1427,35 @@ def create_main(
     chain_id_to_main_msa = {}
     chain_id_to_profile = {}
     chain_id_to_del_mean = {}
+    n_rows_paired_subsampled = msa_array_collection.row_counts.n_rows_paired_subsampled
+    n_rows_main_subsampled = {}
+    max_n_rows_main_subsampled = 0
     for chain_id, rep_id in msa_array_collection.chain_id_to_rep_id.items():
-        # Get indices for subsampled main MSA - should be seeded by the worker context
         filtered_msa_array = rep_id_to_main_msa[rep_id]
-        k = generator.integers(1, filtered_msa_array.msa.shape[0] + 1)
-        idx = generator.choice(filtered_msa_array.msa.shape[0], size=k, replace=False)
+        n_rows_main_msa = filtered_msa_array.msa.shape[0]
+        n_rows_main_msa_lim = max_rows - n_rows_paired_subsampled - 1
+        k = generator.integers(1, min(n_rows_main_msa + 1, n_rows_main_msa_lim))
+        idx = generator.choice(n_rows_main_msa, size=k, replace=False)
         if keep_subsampled_order:
             idx.sort()
-        chain_id_to_main_msa[chain_id] = MsaArray(
+        main_msa = MsaArray(
             msa=filtered_msa_array.msa[idx, :],
             deletion_matrix=filtered_msa_array.deletion_matrix[idx, :],
             metadata=pd.DataFrame(),
         )
+        chain_id_to_main_msa[chain_id] = main_msa
         chain_id_to_profile[chain_id] = rep_id_to_profile[rep_id]
         chain_id_to_del_mean[chain_id] = rep_id_to_del_mean[rep_id]
 
+        main_msa_depth = main_msa.msa.shape[0]
+        if main_msa_depth > max_n_rows_main_subsampled:
+            max_n_rows_main_subsampled = main_msa_depth
+        n_rows_main_subsampled[chain_id] = main_msa_depth
+
+    # Update row counts
+    n_rows_total = 1 + n_rows_paired_subsampled + max_n_rows_main_subsampled
+    msa_array_collection.set_row_counts(
+        n_rows_total=n_rows_total,
+        n_rows_main_subsampled=n_rows_main_subsampled,
+    )
     return chain_id_to_main_msa, chain_id_to_profile, chain_id_to_del_mean

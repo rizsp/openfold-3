@@ -460,6 +460,9 @@ class MsaSampleParser:
         # Collect data into MsaArrayCollection
         msa_array_collection = self.create_msa_array_collection(maps)
 
+        # Init row counts
+        msa_array_collection.set_row_counts(0, 0, {})
+
         return msa_array_collection
 
 

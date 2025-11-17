@@ -56,6 +56,7 @@ class MsaSampleProcessor:
         )
         self.main_msa_processor = partial(
             create_main,
+            max_rows=config.max_rows,
             aln_order=config.aln_order,
             keep_subsampled_order=config.keep_subsampled_order,
         )

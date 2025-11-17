@@ -82,54 +82,6 @@ class MsaTokenMapper:
     res_id: np.ndarray[int]
 
 
-@log_runtime_memory(runtime_dict_key="runtime-msa-feat-precursor-rowcount")
-def calculate_row_counts(
-    msa_array_collection: MsaArrayCollection, max_rows: int, max_rows_paired: int
-) -> None:
-    """Calculates the row counts of the MSA arrays in the crop/assembly.
-
-    Follows the logic of the AF3 SI sections 2.2 and 2.3.
-
-    Args:
-        msa_array_collection (MsaArrayCollection):
-            The processed collection of MSA arrays.
-        max_rows (int):
-            The maximum number of rows allowed for the sum of the cropped paired rows,
-            max of main rows + 1 (query).
-        max_rows_paired (int):
-            The maximum number of rows allowed for the paired MSA.
-    """
-    if bool(msa_array_collection.chain_id_to_query_seq):
-        # Paired MSA rows
-        if bool(msa_array_collection.chain_id_to_paired_msa):
-            n_rows_paired = next(
-                iter(msa_array_collection.chain_id_to_paired_msa.values())
-            ).msa.shape[0]
-            n_rows_paired_subsampled = min(max_rows_paired, n_rows_paired)
-        else:
-            n_rows_paired_subsampled = 0
-
-        # Main MSA rows
-        n_rows_main_subsampled = {
-            k: v.msa.shape[0]
-            for k, v in msa_array_collection.chain_id_to_main_msa.items()
-        }
-        n_rows_main_max = max(n_rows_main_subsampled.values())
-
-        # Combine
-        n_rows = min([1 + n_rows_paired_subsampled + n_rows_main_max, max_rows])
-    else:
-        n_rows = 1
-        n_rows_paired_subsampled = 0
-        n_rows_main_subsampled = {}
-
-    msa_array_collection.set_state_prefeaturized(
-        n_rows=n_rows,
-        n_rows_paired_subsampled=n_rows_paired_subsampled,
-        n_rows_main_subsampled=n_rows_main_subsampled,
-    )
-
-
 @log_runtime_memory(
     runtime_dict_key="runtime-msa-feat-precursor-crop-vstack", multicall=True
 )
@@ -157,13 +109,14 @@ def vstack_pad_msa_arrays(
     msa_array_vstack = msa_array_collection.chain_id_to_query_seq[chain_id]
 
     # Paired MSA
-    if msa_array_collection.row_counts["n_rows_paired_subsampled"] > 0:
+    if msa_array_collection.row_counts.n_rows_paired_subsampled > 0:
+        print(msa_array_collection.row_counts)
         msa_array_vstack = msa_array_vstack.concatenate(
             msa_array_collection.chain_id_to_paired_msa[chain_id], axis=0
         )
 
     # Main MSA
-    if len(msa_array_collection.row_counts["n_rows_main_subsampled"]) > 0:
+    if len(msa_array_collection.row_counts.n_rows_main_subsampled) > 0:
         msa_array_vstack = msa_array_vstack.concatenate(
             msa_array_collection.chain_id_to_main_msa[chain_id],
             axis=0,
@@ -172,7 +125,7 @@ def vstack_pad_msa_arrays(
     # Pad bottom of stacked MSA to max(1 + n paired + n main) across all chains
     # and use padding to also create MSA mask for the chain
     msa_array_vstack, msa_array_vstack_mask = msa_array_vstack.pad(
-        target_length=msa_array_collection.row_counts["n_rows"], axis=0
+        target_length=msa_array_collection.row_counts.n_rows_total, axis=0
     )
 
     return msa_array_vstack, msa_array_vstack_mask
@@ -267,8 +220,6 @@ def create_msa_feature_precursor_of3(
     atom_array: AtomArray,
     msa_array_collection: MsaArrayCollection,
     n_tokens: int,
-    max_rows: int,
-    max_rows_paired: int,
 ) -> MsaFeaturePrecursorOF3:
     """Creates a set of precursor arrays for AF3 MSA featurization.
 
@@ -279,10 +230,6 @@ def create_msa_feature_precursor_of3(
             Collection of processed MSA data per chain.
         n_tokens (int):
             Number of tokens in the atom array.
-        max_rows (int):
-            The maximum number of rows to use.
-        max_rows_paired (int):
-            The maximum number of rows to pair.
 
     Returns:
         MsaProcessed:
@@ -290,20 +237,16 @@ def create_msa_feature_precursor_of3(
             to predict during inference to featurize.
     """
     if bool(msa_array_collection.chain_id_to_query_seq):
-        # fetch rowcounts
-        calculate_row_counts(msa_array_collection, max_rows, max_rows_paired)
-
         # Pre-allocate feature precursor container
         msa_feature_precursor = MsaFeaturePrecursorOF3(
-            msa=np.full([msa_array_collection.row_counts["n_rows"], n_tokens], "-"),
-            msa_index=np.ones([msa_array_collection.row_counts["n_rows"], n_tokens])
+            msa=np.full([msa_array_collection.row_counts.n_rows_total, n_tokens], "-"),
+            msa_index=np.ones([msa_array_collection.row_counts.n_rows_total, n_tokens])
             * np.where(np.array(STANDARD_RESIDUES_WITH_GAP_1) == "-")[0].item(),
             deletion_matrix=np.zeros(
-                [msa_array_collection.row_counts["n_rows"], n_tokens]
+                [msa_array_collection.row_counts.n_rows_total, n_tokens]
             ),
-            n_rows_paired=msa_array_collection.row_counts["n_rows_paired_subsampled"]
-            + 1,
-            msa_mask=np.ones([msa_array_collection.row_counts["n_rows"], n_tokens]),
+            n_rows_paired=msa_array_collection.row_counts.n_rows_paired_subsampled + 1,
+            msa_mask=np.ones([msa_array_collection.row_counts.n_rows_total, n_tokens]),
             msa_profile=np.zeros([n_tokens, len(STANDARD_RESIDUES_WITH_GAP_1)]),
             deletion_mean=np.zeros(n_tokens),
         )

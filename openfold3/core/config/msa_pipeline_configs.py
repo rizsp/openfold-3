@@ -31,7 +31,7 @@ class MsaChainDataTrain(BaseModel):
     """Training input for a single chain in the MSA sample processor pipeline."""
 
     molecule_type: Annotated[MoleculeType, BeforeValidator(_convert_molecule_type)]
-    alignment_representative_id: str
+    alignment_representative_id: str | None
 
 
 class MsaChainDataInference(BaseModel):

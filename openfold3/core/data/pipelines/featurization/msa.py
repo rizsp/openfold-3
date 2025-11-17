@@ -71,8 +71,6 @@ class MsaFeaturizerOF3:
         return create_msa_feature_precursor_of3(
             atom_array=atom_array,
             msa_array_collection=msa_array_collection,
-            max_rows=self.max_rows,
-            max_rows_paired=self.max_rows_paired,
             n_tokens=n_tokens,
         )
 
