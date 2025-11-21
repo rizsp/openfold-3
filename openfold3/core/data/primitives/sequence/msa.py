@@ -637,13 +637,14 @@ def extract_alignments_to_pair(
             if m is not None:
                 msa_arrays_to_pair_i.append(m)
 
-        msa_arrays_to_pair_cat = MsaArray.multi_concatenate(
-            msa_arrays=msa_arrays_to_pair_i,
-            axis=0,
-        )
+        if msa_arrays_to_pair_i:
+            msa_arrays_to_pair_cat = MsaArray.multi_concatenate(
+                msa_arrays=msa_arrays_to_pair_i,
+                axis=0,
+            )
 
-        if msa_arrays_to_pair_cat is not None and len(msa_arrays_to_pair_cat) > 1:
-            msa_arrays_to_pair[rep_id] = msa_arrays_to_pair_cat
+            if len(msa_arrays_to_pair_cat) > 1:
+                msa_arrays_to_pair[rep_id] = msa_arrays_to_pair_cat
 
     return msa_arrays_to_pair
 
@@ -1086,7 +1087,7 @@ def create_paired(
         pairing_mask_keys (list[str]):
             List of strings indicating which mask to add.
         msas_to_pair (list[str]):
-            Msas to to pair for online pairing
+            Msas to pair for online pairing
 
     Returns:
         dict[str, Msa]:

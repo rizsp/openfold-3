@@ -3,6 +3,13 @@ experiment_settings:
   output_dir: ./test_train_output 
   seed: 1272025
   restart_checkpoint_path: last
+  preemption_safe_resume: true
+  ckpt_load_settings:
+    manual_checkpoint_loading: true
+    init_from_ema_weights: true
+    restore_lr_scheduler: false
+    restore_time_step: true
+    strict_loading: false
 
 data_module_args:
   batch_size: 1
@@ -100,48 +107,6 @@ dataset_paths:
     template_structures_directory: none
     template_file_format: pkl
     ccd_file: /path 
-
-  long-monomer-distillation:
-    alignments_directory: none 
-    alignment_db_directory: none 
-    alignment_array_directory: /path/ 
-    dataset_cache_file: /path/ 
-    target_structures_directory: /path 
-    target_structure_file_format: npz
-    reference_molecule_directory: /path/ 
-    template_cache_directory: /path/ 
-    template_structure_array_directory: /path/ 
-    template_structures_directory: none
-    template_file_format: pkl
-    ccd_file: /path 
-
-  short-monomer-distillation:
-    alignments_directory: none 
-    alignment_db_directory: none 
-    alignment_array_directory: /path/ 
-    dataset_cache_file: /path/ 
-    target_structures_directory: /path 
-    target_structure_file_format: npz
-    reference_molecule_directory: /path/ 
-    template_cache_directory: /path/ 
-    template_structure_array_directory: /path/ 
-    template_structures_directory: none
-    template_file_format: pkl
-    ccd_file: /path 
-
-  disordered-pdb:
-    alignments_directory: none 
-    alignment_db_directory: none 
-    alignment_array_directory: /path/ 
-    dataset_cache_file: /path/ 
-    target_structures_directory: /path 
-    target_structure_file_format: npz
-    reference_molecule_directory: /path/ 
-    template_cache_directory: /path/ 
-    template_structure_array_directory: /path/ 
-    template_structures_directory: none
-    template_file_format: pkl
-    ccd_file: /path
 
   val-weighted-pdb:
     alignments_directory: none 

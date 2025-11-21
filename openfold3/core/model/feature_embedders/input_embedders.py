@@ -127,7 +127,6 @@ class InputEmbedderAllAtom(nn.Module):
         with torch.amp.autocast(device_type="cuda", dtype=torch.float32):
             a, _, _, _ = self.atom_attn_enc(
                 batch=batch,
-                atom_mask=batch["atom_mask"],
                 use_high_precision_attention=use_high_precision_attention,
             )
 
@@ -219,6 +218,7 @@ class MSAModuleEmbedder(nn.Module):
             c_s_input, c_m, **linear_init_params.linear_s_input
         )
 
+    # TODO: Move this to the data pipeline
     @staticmethod
     def _subsample_main_msa(
         msa_feat: torch.Tensor,
