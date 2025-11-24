@@ -120,6 +120,7 @@ class TemplateSettings(BaseModel):
 
     n_templates: int = 4
     take_top_k: bool = False
+    min_n_tokens_per_chain: int = 5
     distogram: TemplateDistogramSettings = TemplateDistogramSettings()
 
 

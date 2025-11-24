@@ -287,6 +287,7 @@ class BaseOF3Dataset(SingleDataset, ABC):
             atom_array=atom_array,
             n_templates=self.template.n_templates,
             take_top_k=self.template.take_top_k,
+            min_n_tokens_per_chain=self.template.min_n_tokens_per_chain,
             template_cache_directory=self.template_cache_directory,
             assembly_data=self.fetch_fields_for_chains(
                 pdb_id=pdb_id,
