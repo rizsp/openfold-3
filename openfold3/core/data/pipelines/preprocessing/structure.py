@@ -984,13 +984,13 @@ def preparse_RNA_monomer(
     output_dir: Path,
 ):
     ### to reduce run times only parse if the file does not exist
-    output_file = output_dir / f"{entry_id}/{entry_id}.pkl"
+    output_file = output_dir / f"{entry_id}/structure.npz"
     if output_file.exists():
         return
     _, atom_array = parse_RNA_monomer_pdb_tmp(
         data_directory / entry_id / f"{entry_id}.{structure_file_format}"
     )
-    write_structure(atom_array, output_dir / f"{entry_id}/{entry_id}.pkl")
+    write_structure(atom_array, output_dir / f"{entry_id}/structure.npz")
 
 class _RNAMonomerPreprocessingWrapper:
     def __init__(
