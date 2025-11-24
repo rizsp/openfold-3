@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 from biotite.database import RequestError
 from biotite.database.rcsb import fetch
+from biotite.structure import AtomArray
 from biotite.structure.io import pdbx
 from biotite.structure.io.pdbx import CIFFile
 from func_timeout import func_timeout
@@ -54,7 +55,10 @@ from openfold3.core.data.io.sequence.template import (
     parse_hmmsearch_sto,
     parse_template_alignment,
 )
-from openfold3.core.data.io.structure.atom_array import write_atomarray_to_npz
+from openfold3.core.data.io.structure.atom_array import (
+    read_atomarray_from_npz,
+    write_atomarray_to_npz,
+)
 from openfold3.core.data.io.structure.cif import _load_ciffile, parse_mmcif
 from openfold3.core.data.primitives.caches.format import DatasetCache
 from openfold3.core.data.primitives.quality_control.logging_utils import (
@@ -1492,6 +1496,11 @@ class TemplatePreprocessorSettings(BaseModel):
             structure it is provided for as a template.
         max_templates (int):
             Maximum number of valid templates to keep per query chain after filtering.
+        min_f_resolved (float):
+            Minimum fraction of resolved residues (n resolved / n total) needed for a
+            template to be considered valid. NOTE that this is only used if the template
+            structure arrays and template precache entries are computed separately from
+            the main template cache entries.
         fetch_missing_template_structures (bool):
             Whether to fetch missing template structures from the PDB. Requires internet
             access.
@@ -1537,6 +1546,7 @@ class TemplatePreprocessorSettings(BaseModel):
     max_release_date: datetime | None = None
     min_release_date_diff: int | None = None
     max_templates: int = 20
+    min_f_resolved: float = 0.1
 
     fetch_missing_structures: bool = True
     create_precache: bool = False
@@ -2075,7 +2085,9 @@ class TemplatePrecachePreprocessor:
 
         self.structure_directory = config.structure_directory
         self.structure_file_format = config.structure_file_format
+        self.structure_array_directory = config.structure_array_directory
         self.precache_directory = config.precache_directory
+        self.min_f_resolved = config.min_f_resolved
 
         # Get list of template entry IDs
         self.template_entry_ids = [
@@ -2093,6 +2105,14 @@ class TemplatePrecachePreprocessor:
             return
 
         print(f"Found {len(self.template_entry_ids)} template structures to process.")
+
+        if self.structure_array_directory is not None:
+            print(
+                "Filtering based on precomputed structure arrays at "
+                f"{self.structure_array_directory}."
+            )
+        else:
+            print("No structure array directory provided. No additional filtering.")
 
     def __call__(self) -> None:
         with mp.Pool(self.n_processes) as pool:
@@ -2119,7 +2139,6 @@ class TemplatePrecachePreprocessor:
         """
         try:
             precache_entry_file = self.precache_directory / f"{template_entry_id}.npz"
-
             if precache_entry_file.exists():
                 return
 
@@ -2132,6 +2151,49 @@ class TemplatePrecachePreprocessor:
                 "%Y-%m-%d"
             )
 
+            if self.structure_array_directory is not None:
+                for chain_id in chain_id_seq_map:
+                    structure_array_path = (
+                        self.structure_array_directory
+                        / template_entry_id
+                        / f"{template_entry_id}_{chain_id}.npz"
+                    )
+                    # Skip precache computation if a chain is missing
+                    if not structure_array_path.exists():
+                        raise FileNotFoundError(
+                            f"Structure array missing for entry {template_entry_id}"
+                            f" chain {chain_id}"
+                        )
+                    else:
+                        structure_array = read_atomarray_from_npz(structure_array_path)
+
+                        # Check that backbone and pseudo-beta atoms are present in at
+                        # least the prespecified fraction of residues
+                        is_n = structure_array.atom_name == "N"
+                        is_ca = structure_array.atom_name == "CA"
+                        is_c = structure_array.atom_name == "C"
+
+                        is_gly = structure_array.res_name == "GLY"
+                        is_cb = structure_array.atom_name == "CB"
+                        is_pseudo_beta_atom = (is_gly & is_ca) | (~is_gly & is_cb)
+
+                        for mask, mask_name in zip(
+                            [is_n, is_ca, is_c, is_pseudo_beta_atom],
+                            ["backbone N", "backbone CA", "backbone C", "pseudo beta"],
+                            strict=True,
+                        ):
+                            f_resolved = np.sum(
+                                structure_array[mask].occupancy == 1
+                            ) / np.clip(np.sum(mask), 1, None)
+
+                            if f_resolved <= self.min_f_resolved:
+                                raise Exception(
+                                    f"Not enough resolved {mask_name} atoms in entry"
+                                    f" {template_entry_id} chain {chain_id}:"
+                                    f"{f_resolved} <= {self.min_f_resolved}."
+                                )
+
+            # Save precache if all checks pass
             np.savez_compressed(
                 precache_entry_file,
                 **{
@@ -2141,7 +2203,7 @@ class TemplatePrecachePreprocessor:
             )
         except Exception as e:
             print(
-                f"Failed to preprocess template structure "
+                f"Failed to create template precache entry "
                 f"{template_entry_id}:"
                 f"\n\nException:\n{str(e)}"
                 f"\n\nType:\n{type(e).__name__}"
@@ -2313,7 +2375,7 @@ def preprocess_template_structure_for_template(
     template_structure_array_subdirectory: Path,
     ccd: CIFFile,
     moltypes: np.ndarray[int],
-) -> tuple[CIFFile, np.ndarray]:
+) -> tuple[CIFFile, AtomArray]:
     """Preparse and process a template structure."""
     # Parse template structure
     cif_file, atom_array = parse_mmcif(template_structure_file)
