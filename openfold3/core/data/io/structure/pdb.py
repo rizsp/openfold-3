@@ -74,7 +74,7 @@ def parse_protein_monomer_pdb_tmp(
 
     ## no label fields in pdb files
     with open_local_or_s3(file_path, profile=s3_profile) as f:
-        cif_file = pdbx.CIFFile.read(f)
+        pdb_file = pdb.PDBFile.read(f)
     extra_fields_preset = [
         "occupancy",
         "charge",
@@ -86,13 +86,13 @@ def parse_protein_monomer_pdb_tmp(
         extra_fields = extra_fields_preset
 
     parser_args = {
-        "cif_file": cif_file,
+        "pdb_file": pdb_file,
         "model": 1,
         "altloc": "occupancy",
         "include_bonds": include_bonds,
         "extra_fields": extra_fields,
     }
-    atom_array = pdbx.get_structure(
+    atom_array = pdb.get_structure(
         **parser_args,
     )
 
@@ -113,7 +113,6 @@ def parse_protein_monomer_pdb_tmp(
     atom_array = remove_std_residue_terminal_atoms(atom_array)
 
     return ParsedStructure(cif_file, atom_array)
-
 
 # TODO: refactor with PDB reader below as it currently only supports monomers
 def parse_RNA_monomer_pdb_tmp(
