@@ -98,18 +98,10 @@ from openfold3.core.data.pipelines.preprocessing.template import (
 )
 @click.option(
     "--template_file_format",
-    required=True,
+    required=False,
     help="File format for the template structures.",
     type=str,
-)
-@click.option(
-    "--query_seq_load_logic",
-    required=True,
-    help=(
-        "Whether to load the query sequences associated with structures from fasta "
-        "or structure files."
-    ),
-    type=click.Choice(["fasta", "structure"], case_sensitive=True),
+    default="cif",
 )
 @click.option(
     "--single_moltype",
@@ -244,7 +236,6 @@ def main(
     query_structures_filename: str,
     query_file_format: str,
     template_file_format: str,
-    query_seq_load_logic: str,
     single_moltype: str | None,
     num_workers: int,
     dataset_cache_file: Path,
@@ -286,9 +277,6 @@ def main(
             File format for the query structures.
         template_file_format (str):
             File format for the template structures.
-        query_seq_load_logic (str):
-            Whether to load the query sequences associated with structures from fasta or
-            structure files.
         single_moltype (str | None):
             Constant molecule type to use if all query structures contain the same
             molecule type. Needed if the input dataset cache is missing the per-chain
@@ -367,6 +355,7 @@ def main(
     template_precache_dir = output_directory / Path("template_precache")
     template_precache_log_dir = output_directory / Path("template_precache_logs")
     if compute_precache:
+        print("1/3: Creating the template sequence cache.")
         logging.info("1/3: Creating the template sequence cache.")
         template_precache_dir.mkdir(parents=True, exist_ok=True)
         template_precache_log_dir.mkdir(parents=True, exist_ok=True)
@@ -382,6 +371,10 @@ def main(
             log_dir=template_precache_log_dir,
         )
     else:
+        print(
+            "Skipping template precache generation. Using existing precache "
+            f"from {template_precache_dir}."
+        )
         logging.info(
             "Skipping template precache generation. Using existing precache "
             f"from {template_precache_dir}."
@@ -390,6 +383,7 @@ def main(
     template_cache_dir = output_directory / Path("template_cache")
     template_cache_log_dir = output_directory / Path("template_cache_logs")
     if compute_full_cache:
+        print("2/3: Creating the template cache.")
         logging.info("2/3: Creating the template cache.")
         template_cache_dir.mkdir(parents=True, exist_ok=True)
         template_cache_log_dir.mkdir(parents=True, exist_ok=True)
@@ -404,7 +398,6 @@ def main(
             max_templates_construct=max_templates_construct,
             query_structures_filename=query_structures_filename,
             query_file_format=query_file_format,
-            query_seq_load_logic=query_seq_load_logic,
             single_moltype=single_moltype,
             num_workers=num_workers,
             log_level=log_level,
@@ -414,6 +407,10 @@ def main(
             s3_client_config=s3_client_config,
         )
     else:
+        print(
+            "Skipping template cache generation. Using existing cache "
+            f"from {template_cache_dir}."
+        )
         logging.info(
             "Skipping template cache generation. Using existing cache "
             f"from {template_cache_dir}."
@@ -423,6 +420,7 @@ def main(
         "template_cache_filtered_logs"
     )
     if compute_filtered_cache:
+        print("3/3: Filtering the template cache.")
         logging.info("3/3: Filtering the template cache.")
         template_cache_filtered_log_dir.mkdir(parents=True, exist_ok=True)
         filter_template_cache_of3(
@@ -441,6 +439,7 @@ def main(
             min_release_date_diff=min_release_date_diff,
         )
     else:
+        print("Skipping template cache filtering.")
         logging.info("Skipping template cache filtering.")
 
 

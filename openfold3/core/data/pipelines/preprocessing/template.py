@@ -279,7 +279,6 @@ def create_template_cache_entry_for_query(
     max_templates_construct: int,
     query_structures_filename: str,
     query_file_format: str,
-    query_seq_load_logic: str,
     s3_client_config: dict | None,
     log_dir=Path,
 ) -> None:
@@ -338,9 +337,6 @@ def create_template_cache_entry_for_query(
             Uses the the subdir name if set to "None".
         query_file_format (str):
             File format of the query structures.
-        query_seq_load_logic (str):
-            Whether to derive the structure-associated query sequence from a structure
-            file or a preprocessed fasta file. Should be one of "structure" or "fasta".
         s3_client_config (dict | None):
             Configuration for the S3 client. Should contain the profile name for the S3
             client.
@@ -352,12 +348,12 @@ def create_template_cache_entry_for_query(
         "query_chain_id": query_pdb_chain_id.split("_")[1],
         "can_load_aln_file": False,
         "template_cache_already_computed": False,
-        "query_cif_exists": False,
+        "query_cif_or_fasta_exists": False,
         "query_seq_match": False,
         "n_total_templates_in_aln": 0,
         "n_unique_templates_in_aln": 0,
         "n_templates_pass_seq_filters": 0,
-        "n_templates_has_cif": 0,
+        "n_templates_has_precache": 0,
         "n_template_chain_match": 0,
         "n_valid_templates_prefilter": 0,
     }
@@ -406,16 +402,16 @@ def create_template_cache_entry_for_query(
     # query_structures_directory
     query_structures_filename = (
         query_pdb_id
-        if query_structures_filename == "None"
+        if (query_structures_filename == "None") | (query_structures_filename is None)
         else query_structures_filename
     )
     qp = query_structures_directory / Path(
-        f"{query_structures_filename}.{query_file_format}"
+        f"{query_pdb_id}/{query_structures_filename}.{query_file_format}"
     )
     # Currently only checking existence of local files
     if (not str(qp).startswith("s3:/")) and (not (qp).exists()):
         template_process_logger.info(
-            f"Query .{query_file_format} structure {query_structures_filename} not "
+            f"Query {query_structures_filename}.{query_file_format} not "
             f"found in  {query_structures_directory}. Skipping templates for this "
             "structure."
         )
@@ -424,21 +420,21 @@ def create_template_cache_entry_for_query(
             log_dir / Path(f"data_log_{os.getpid()}.tsv"),
         )
         return
-    data_log["query_cif_exists"] = True
+    data_log["query_cif_or_fasta_exists"] = True
     # 2. Parse query chain and sequence
     # the query and all its templates are skipped if its HMM sequence cannot be mapped
     # exactly to a subsequence of the MATCHING chain in the CIF/PDB file provided in
     # query_structures_directory (no chain/sequence remapping is done)
-    if match_query_chain_and_sequence(
+    is_query_invalid, query_seq_full = match_query_chain_and_sequence(
         query_structures_directory,
         query,
         query_pdb_id,
         query_chain_id,
-        query_seq_load_logic,
         query_file_format,
         query_structures_filename,
         s3_profile=profile,
-    ):
+    )
+    if is_query_invalid:
         template_process_logger.info(
             f"The query sequences in the structure (query {query_pdb_id} chain "
             f"{query_chain_id}) and template alignment (query {query_pdb_id_t} chain "
@@ -447,10 +443,6 @@ def create_template_cache_entry_for_query(
         data_log_to_tsv(data_log, log_dir / Path(f"data_log_{os.getpid()}.tsv"))
         return
     else:
-        template_process_logger.info(
-            f"Query {query_pdb_id} chain {query_chain_id} sequence matches "
-            "alignment sequence."
-        )
         data_log["query_seq_match"] = True
 
     # Filter template hits
@@ -458,60 +450,53 @@ def create_template_cache_entry_for_query(
     data_log["n_unique_templates_in_aln"] = len(
         set(hit.hit_sequence for hit in hits.values())
     )
-    filtered_seq = set()
+    precache_missing = set()
     template_hits_filtered = {}
     for idx, hit in hits.items():
-        # Skip query
-        if idx == 0:
-            continue
-
         hit_pdb_id, hit_chain_id = hit.name.split("_")
 
-        # Skip hits if sequence alignment already used
-        if hit.hit_sequence in filtered_seq:
-            template_process_logger.info(
-                f"Template {hit.name} sequence alignment is a duplicate. "
-                "Skipping this template."
-            )
+        # Skip query
+        if idx == 0:
+            template_process_logger.info(f"Skipping query {hit_pdb_id}.")
+            continue
+        # Skip templates whose precache is missing
+        if hit_pdb_id in precache_missing:
             continue
 
         # 1. Apply sequence filters: AF3 SI Section 2.4
-        if check_sequence(query_seq=query.hit_sequence.replace("-", ""), hit=hit):
+        fails_sequence_filters, query_aln, hit_aln = check_sequence(
+            query=query, hit=hit
+        )
+        if fails_sequence_filters:
             template_process_logger.info(
                 f"Template {hit_pdb_id} sequence does not pass sequence"
                 " filters. Skipping this template."
             )
             continue
         else:
-            template_process_logger.info(
-                f"Template {hit_pdb_id} sequence passes sequence filters."
-            )
             data_log["n_templates_pass_seq_filters"] += 1
 
         # 2. Parse structure
         # The template is skipped if the structure identified by the PDB ID of the
         # corresponding hit in the alignment file is not provided in
         # template_structures_path
-        try:
+        precache_entry_path = template_precache_directory / Path(f"{hit_pdb_id}.npz")
+        if precache_entry_path.exists():
             template_precache = np.load(
-                template_precache_directory / Path(f"{hit_pdb_id}.npz"),
+                precache_entry_path,
                 allow_pickle=True,
             )
             chain_id_seq_map = template_precache["chain_id_seq_map"].item()
             release_date = template_precache["release_date"].item()
-        except FileNotFoundError:
-            chain_id_seq_map = None
-            release_date = None
-
-        if chain_id_seq_map is None:
-            template_process_logger.info(
-                f"Template structure {hit_pdb_id} not found in "
-                f"{template_structures_directory}. Skipping this template."
-            )
-            continue
+            data_log["n_templates_has_precache"] += 1
         else:
-            template_process_logger.info(f"Template structure {hit_pdb_id} parsed.")
-            data_log["n_templates_has_cif"] += 1
+            template_process_logger.info(
+                f"Precache for template structure {hit_pdb_id} not found in "
+                f"{template_precache_directory}. Skipping this template."
+            )
+            precache_missing.add(hit_pdb_id)
+            continue
+
         # 3. Parse template chain and sequence
         # the template is skipped if its HMM sequence cannot be mapped
         # exactly to a subsequence of ANY chain in the CIF file provided in
@@ -519,7 +504,9 @@ def create_template_cache_entry_for_query(
         # in the alignment file
         # !!! Note that the chain ID-sequence map for this step is derived from the
         # unprocessed CIF file provided in the template_structures_directory
-        hit_chain_id_matched = match_template_chain_and_sequence(chain_id_seq_map, hit)
+        hit_chain_id_matched, hit_seq_full = match_template_chain_and_sequence(
+            chain_id_seq_map, hit
+        )
         if hit_chain_id_matched is None:
             template_process_logger.info(
                 f"Could not match template {hit_pdb_id} chain {hit_chain_id} "
@@ -530,7 +517,12 @@ def create_template_cache_entry_for_query(
             data_log["n_template_chain_match"] += 1
 
         # Create residue index map
-        idx_map = create_residue_idx_map(query, hit)
+        idx_map = create_residue_idx_map(
+            query_aln.astype("U1"),
+            hit_aln.astype("U1"),
+            query_seq_full,
+            hit_seq_full,
+        )
 
         # Store as filtered hit
         # hmmsearch is sorted in descending e-value order so index is enough to sort
@@ -539,9 +531,6 @@ def create_template_cache_entry_for_query(
             "release_date": release_date,
             "idx_map": idx_map,
         }
-
-        # Store sequence alignment for hit as already used
-        filtered_seq.add(hit.hit_sequence)
 
         # Break if max templates reached
         if len(template_hits_filtered) == max_templates_construct:
@@ -578,7 +567,6 @@ class _OF3TemplateCacheConstructor:
         max_templates_construct: int,
         query_structures_filename: str,
         query_file_format: str,
-        query_seq_load_logic: str,
         log_level: str,
         log_to_file: bool,
         log_to_console: bool,
@@ -616,9 +604,6 @@ class _OF3TemplateCacheConstructor:
                 subdirectory. Uses the the subdir name if set to "None".
             query_file_format (str):
                 File format of the query structures.
-            query_seq_load_logic (str):
-                Whether to load the query sequence from the structure file or a
-                preprocessed fasta file. Should be one of "structure" or "fasta".
             log_level (str):
                 Log level for the logger.
             log_to_file (bool):
@@ -638,7 +623,6 @@ class _OF3TemplateCacheConstructor:
         self.max_templates_construct = max_templates_construct
         self.query_structures_filename = query_structures_filename
         self.query_file_format = query_file_format
-        self.query_seq_load_logic = query_seq_load_logic
         self.log_level = log_level
         self.log_to_file = log_to_file
         self.log_to_console = log_to_console
@@ -663,7 +647,6 @@ class _OF3TemplateCacheConstructor:
                 input.dated_query.query_pdb_chain_id,
                 input.rep_pdb_chain_id,
             )
-            query_pdb_id = query_pdb_chain_id.split("_")[0]
             template_alignment_file = (
                 self.template_alignment_directory
                 / Path(rep_pdb_chain_id)
@@ -677,12 +660,10 @@ class _OF3TemplateCacheConstructor:
                 template_structures_directory=self.template_structures_directory,
                 template_cache_directory=self.template_cache_directory,
                 template_precache_directory=self.template_precache_directory,
-                query_structures_directory=self.query_structures_directory
-                / Path(query_pdb_id),
+                query_structures_directory=self.query_structures_directory,
                 max_templates_construct=self.max_templates_construct,
                 query_structures_filename=self.query_structures_filename,
                 query_file_format=self.query_file_format,
-                query_seq_load_logic=self.query_seq_load_logic,
                 log_dir=self.log_dir,
                 s3_client_config=self.s3_client_config,
             )
@@ -703,7 +684,6 @@ def create_template_cache_of3(
     max_templates_construct: int,
     query_structures_filename: str,
     query_file_format: str,
-    query_seq_load_logic: str,
     single_moltype: str | None,
     num_workers: int,
     log_level: str,
@@ -739,9 +719,6 @@ def create_template_cache_of3(
             Uses the the subdir name if set to "None".
         query_file_format (str):
             File format of the query structures.
-        query_seq_load_logic (str):
-            Whether to load the query sequence from the structure file or a preprocessed
-            fasta file. Should be one of "structure" or "fasta".
         single_moltype (str | None):
             Constant molecule type to use if the dataset contains only a single molecule
             type and the dataset cache does not contain per-chain molecule type field.
@@ -775,7 +752,6 @@ def create_template_cache_of3(
         max_templates_construct,
         query_structures_filename,
         query_file_format,
-        query_seq_load_logic,
         log_level,
         log_to_file,
         log_to_console,
