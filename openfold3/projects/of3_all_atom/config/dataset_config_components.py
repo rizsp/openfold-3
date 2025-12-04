@@ -88,6 +88,7 @@ class MSASettings(BaseModel):
         "rnacentral_hits": 10000,
         "nt_hits": 10000,
         "concat_cfdb_uniref100_filtered": 10000000,
+        "mmseqs_colabfold": 16384,
         "colabfold_main": 16384,
         "colabfold_paired": 8192,
     }
@@ -102,6 +103,7 @@ class MSASettings(BaseModel):
         "rnacentral_hits",
         "nt_hits",
         "concat_cfdb_uniref100_filtered",
+        "mmseqs_colabfold",
         "colabfold_main",
         "dummy",  # aln containing only query; used for MSA-free inference
     ]
