@@ -309,6 +309,7 @@ model_config = mlc.ConfigDict(
                     "c_fourier_emb": 256,
                     "max_relative_idx": max_relative_idx,
                     "max_relative_chain": max_relative_chain,
+                    "seed_fourier_emb": 42,
                     "linear_init_params": lin_init.diffusion_cond_init,
                     "tune_chunk_size": tune_chunk_size,
                 },
