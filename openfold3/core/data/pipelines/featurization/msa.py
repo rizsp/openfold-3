@@ -25,6 +25,9 @@ from openfold3.core.data.primitives.featurization.msa import (
 from openfold3.core.data.primitives.featurization.structure import (
     encode_one_hot,
 )
+from openfold3.core.data.primitives.quality_control.logging_utils import (
+    log_runtime_memory,
+)
 from openfold3.core.data.primitives.sequence.msa import MsaArrayCollection
 from openfold3.core.data.resources.residues import (
     STANDARD_RESIDUES_WITH_GAP_1,
@@ -120,6 +123,7 @@ class MsaFeaturizerOF3:
 
         return features
 
+    @log_runtime_memory(runtime_dict_key="runtime-msa-feat")
     def __call__(
         self,
         atom_array: AtomArray,

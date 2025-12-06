@@ -437,6 +437,7 @@ class MsaSampleProcessor:
             "methods to use it."
         )
 
+    @log_runtime_memory(runtime_dict_key="runtime-msa-proc")
     def __call__(self, input: MsaSampleProcessorInput) -> MsaArrayCollection:
         # Parse MSAs
         msa_array_collection = self.msa_sample_parser(input=input)
@@ -492,6 +493,7 @@ class MsaSampleProcessorTrain(MsaSampleProcessor):
             use_roda_monomer_format=use_roda_monomer_format,
         )
 
+    @log_runtime_memory(runtime_dict_key="runtime-msa-proc-create-query-bridge")
     def create_query_seq(
         self,
         input: MsaSampleProcessorInputTrain,
@@ -506,6 +508,7 @@ class MsaSampleProcessorTrain(MsaSampleProcessor):
             chain_id_to_query_seq = {}
         return chain_id_to_query_seq
 
+    @log_runtime_memory(runtime_dict_key="runtime-msa-proc-create-paired-bridge")
     def create_paired_msa(
         self,
         input: MsaSampleProcessorInputTrain,
@@ -525,6 +528,7 @@ class MsaSampleProcessorTrain(MsaSampleProcessor):
             chain_id_to_paired_msa = {}
         return chain_id_to_paired_msa
 
+    @log_runtime_memory(runtime_dict_key="runtime-msa-proc-create-main-bridge")
     def create_main_msa(
         self,
         input: MsaSampleProcessorInputTrain,

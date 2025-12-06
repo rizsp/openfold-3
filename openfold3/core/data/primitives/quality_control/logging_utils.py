@@ -120,17 +120,19 @@ F_NAME_ORDER = [
     # - msa
     "runtime-msa-proc-parse",
     "runtime-msa-proc-create-query",
+    "runtime-msa-proc-create-query-bridge",
     "runtime-msa-proc-homo-mono",
     "runtime-msa-proc-create-paired",
+    "runtime-msa-proc-create-paired-bridge",
     "runtime-msa-proc-create-main",
+    "runtime-msa-proc-create-main-bridge",
     "runtime-msa-feat-precursor",
     # - template
     "runtime-template-proc-sample",
     "runtime-template-proc-align",
     # 5th-level functions
-    "runtime-msa-feat-precursor-rowcount",
-    "runtime-msa-feat-precursor-profile-del-mean",
-    "runtime-msa-feat-precursor-crop-vstack",
+    "runtime-msa-proc-create-main-profile",
+    "runtime-msa-feat-precursor-vstack",
     "runtime-msa-feat-precursor-create-token-mapper",
     "runtime-msa-feat-precursor-map",
     "runtime-template-proc-align-parse",
@@ -166,14 +168,17 @@ runtime-create-all-features
         runtime-msa-proc
             runtime-msa-proc-parse
             runtime-msa-proc-create-query
+            runtime-msa-proc-create-query-bridge (connector)
             runtime-msa-proc-homo-mono
             runtime-msa-proc-create-paired
+            runtime-msa-proc-create-paired-bridge (connector)
             runtime-msa-proc-create-main
+                runtime-msa-proc-create-main-profile
+            runtime-msa-proc-create-main-bridge (connector)
         runtime-msa-feat
             runtime-msa-feat-precursor
                 runtime-msa-feat-precursor-rowcount
-                runtime-msa-feat-precursor-profile-del-mean (* per chain)
-                runtime-msa-feat-precursor-crop-vstack (* per chain)
+                runtime-msa-feat-precursor-vstack (* per chain)
                 runtime-msa-feat-precursor-create-token-mapper (* per chain)
                 runtime-msa-feat-precursor-map (* per chain)
     runtime-create-template-features

@@ -31,6 +31,9 @@ from openfold3.core.config.msa_pipeline_configs import (
     MsaSampleProcessorInputTrain,
 )
 from openfold3.core.data.io.sequence.fasta import parse_fasta
+from openfold3.core.data.primitives.quality_control.logging_utils import (
+    log_runtime_memory,
+)
 from openfold3.core.data.primitives.sequence.msa import (
     MsaArray,
     MsaArrayCollection,
@@ -449,6 +452,7 @@ class MsaSampleParser:
         )
         return msa_array_collection
 
+    @log_runtime_memory(runtime_dict_key="runtime-msa-proc-parse")
     def __call__(self, input: MsaSampleProcessorInput) -> MsaArrayCollection:
         # Create maps between chain IDs, representative IDs, molecule types
         maps = self.create_maps(input=input)

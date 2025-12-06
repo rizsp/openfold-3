@@ -1189,6 +1189,7 @@ def map_row_ids_to_msa_arrays(
     return chain_id_to_paired_msa
 
 
+@log_runtime_memory(runtime_dict_key="runtime-msa-proc-create-main-profile")
 def calculate_profile(
     msa_array: np.ndarray, molecule_type: MoleculeType, chunk_size: int
 ) -> np.ndarray:

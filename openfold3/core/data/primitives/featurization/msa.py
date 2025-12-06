@@ -83,7 +83,7 @@ class MsaTokenMapper:
 
 
 @log_runtime_memory(
-    runtime_dict_key="runtime-msa-feat-precursor-crop-vstack", multicall=True
+    runtime_dict_key="runtime-msa-feat-precursor-vstack", multicall=True
 )
 def vstack_pad_msa_arrays(
     msa_array_collection: MsaArrayCollection,
