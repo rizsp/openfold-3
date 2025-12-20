@@ -580,36 +580,6 @@ class OpenFold3AllAtom(ModelRunner):
             logger.exception(f"Validation step failed with pdb id {', '.join(pdb_id)}")
             raise
 
-    def _save_train_dataset_state_to_datamodule(self):
-        self.trainer.datamodule.next_dataset_indices = (
-            self.trainer.train_dataloader.dataset.next_dataset_indices
-        )
-
-    def _load_train_dataset_state_from_datamodule(self):
-        self.trainer.train_dataloader.dataset.next_dataset_indices = (
-            self.trainer.datamodule.next_dataset_indices
-        )
-
-    def on_train_start(self):
-        # Reload state from datamodule in case checkpoint has been used
-        self._load_train_dataset_state_from_datamodule()
-        if self.global_rank == 0:
-            logger.debug(
-                f"Train start, setting up "
-                f"{self.trainer.train_dataloader.dataset.next_dataset_indices=}"
-            )
-
-    def on_train_epoch_start(self):
-        # At the start of each virtual epoch we want to resample the set of
-        # datapoints to train on
-        self.trainer.train_dataloader.dataset.resample_epoch()
-        self._save_train_dataset_state_to_datamodule()
-        if self.global_rank == 0:
-            logger.debug(
-                "Sampled batch indices: "
-                f"{self.trainer.train_dataloader.dataset.indices=}"
-            )
-
     def on_validation_epoch_start(self):
         # At the start of validation, load the EMA weights
 

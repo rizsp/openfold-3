@@ -168,10 +168,7 @@ class ExperimentRunner(ABC):
 
     @cached_property
     def lightning_data_module(self):
-        return DataModule(
-            self.data_module_config,
-            world_size=self.world_size,
-        )
+        return DataModule(self.data_module_config)
 
     ###############
     # Distributed properties
@@ -348,7 +345,6 @@ class TrainingExperimentRunner(ExperimentRunner):
         """
         super().setup()
         self._setup_logger()
-        self._set_random_seed()
         if self.use_wandb:
             self._wandb_setup()
 
@@ -394,6 +390,10 @@ class TrainingExperimentRunner(ExperimentRunner):
             # If DeepSpeed is enabled, these values will be passed to the DS config
             self.pl_trainer_args.gradient_clip_val = clip_val
             self.pl_trainer_args.gradient_clip_algorithm = "norm"
+
+        # Update distributed sync seed used in the model
+        # Currently used to sync the number of recycles across ranks
+        self.model_config.update({"architecture": {"shared": {"sync_seed": self.seed}}})
 
     @cached_property
     def data_module_config(self) -> DataModuleConfig:
@@ -502,30 +502,6 @@ class TrainingExperimentRunner(ExperimentRunner):
         log_level = log_level.upper()
         log_filepath = self.log_dir / "console_logs.log"
         logging.basicConfig(filename=log_filepath, level=log_level, filemode="w")
-
-    def _set_random_seed(self) -> None:
-        """Set the random seed for reproducibility."""
-
-        seed = self.seed
-        if seed is None and self.is_distributed:
-            raise ValueError("For distributed training, seed must be specified")
-
-        if not isinstance(seed, int):
-            raise ValueError(
-                f"seed={seed} must be an integer. Please provide a valid seed."
-            )
-
-        logger.info(f"Running with seed: {seed}")
-
-        # The datamodule is reseeded with the data_seed, and the model will be
-        # reseeded per rank with the RankSpecificSeedCallback, so most of the
-        # seed_everything() initialization does not matter. This does still
-        # seed the distributed sampler, which will otherwise default to seed 0.
-        pl.seed_everything(seed, workers=True)
-
-        update_dict = {"architecture": {"shared": {"sync_seed": seed}}}
-
-        self.model_config.update(update_dict)
 
     @cached_property
     def loggers(self):
@@ -735,7 +711,6 @@ class InferenceExperimentRunner(ExperimentRunner):
     def lightning_data_module(self):
         return InferenceDataModule(
             self.data_module_config,
-            world_size=self.world_size,
             use_msa_server=self.use_msa_server,
             use_templates=self.use_templates,
             msa_computation_settings=self.experiment_config.msa_computation_settings,

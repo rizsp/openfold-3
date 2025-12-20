@@ -307,6 +307,12 @@ class TrainingExperimentConfig(ExperimentConfig):
         """
         model_seed = self.experiment_settings.seed
         data_seed = self.data_module_args.data_seed
+        world_size = self.pl_trainer_args.devices * self.pl_trainer_args.num_nodes
+
+        # TODO: Currently this will never be true because 42 is the default seed.
+        #  Revisit after removing the default seed value for training and inference
+        if model_seed is None and world_size > 1:
+            raise ValueError("For distributed training, seed must be specified")
 
         if data_seed is None:
             self.data_module_args.data_seed = model_seed

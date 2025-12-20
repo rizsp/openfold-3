@@ -45,7 +45,6 @@ In addition, one can specify the following flags for extended functionality:
 
 import json
 import os
-import random
 import sys
 import warnings
 from pathlib import Path
@@ -55,20 +54,17 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from lightning_fabric.utilities.rank_zero import (
-    rank_zero_only,
-)
+from lightning_fabric.utilities.seed import pl_worker_init_function
 from torch.utils.data import DataLoader, get_worker_info
 from tqdm import tqdm
 
 from openfold3.core.config import config_utils
 from openfold3.core.data.framework.data_module import (
-    _NUMPY_AVAILABLE,
     DataModule,
     DataModuleConfig,
 )
-from openfold3.core.data.framework.lightning_utils import _generate_seed_sequence
 from openfold3.core.data.framework.stochastic_sampler_dataset import (
+    OF3DistributedSampler,
     SamplerDataset,
 )
 from openfold3.core.data.io.utils import JsonStrOrFile
@@ -410,15 +406,20 @@ def main(
     if add_stochastic_sampling:
         logging_dataset = SamplerDataset(
             datasets=datasets,
+            epoch_len=experiment_cfg.data_module_args.epoch_len,
+        )
+        sampler = OF3DistributedSampler(
+            dataset=logging_dataset,
             dataset_probabilities=multi_dataset_config.weights,
             epoch_len=experiment_cfg.data_module_args.epoch_len,
-            generator=torch.Generator(device="cpu").manual_seed(
-                experiment_cfg.data_module_args.data_seed
-            ),
             next_dataset_indices=next_dataset_indices,
+            num_replicas=1,
+            rank=0,
+            seed=experiment_cfg.data_module_args.data_seed,
         )
     else:
         logging_dataset = ConcatDataset(datasets)
+        sampler = None
 
     # This function needs to be defined here to form a closure
     # around log_output_directory, log_level and save_statistics
@@ -437,24 +438,7 @@ def main(
             rank (Optional[int], optional):
                 Worker process rank. Defaults to None.
         """
-        # implementation notes: https://github.com/pytorch/pytorch/issues/5059#issuecomment-817392562
-        global_rank = rank if rank is not None else rank_zero_only.rank
-        process_seed = torch.initial_seed()
-        # back out the base seed so we can use all the bits
-        base_seed = process_seed - worker_id
-        seed_sequence = _generate_seed_sequence(
-            base_seed, worker_id, global_rank, count=4
-        )
-        torch.manual_seed(seed_sequence[0])  # torch takes a 64-bit seed
-        random.seed(
-            (seed_sequence[1] << 32) | seed_sequence[2]
-        )  # combine two 64-bit seeds
-        if _NUMPY_AVAILABLE:
-            import numpy as np
-
-            np.random.seed(
-                seed_sequence[3] & 0xFFFFFFFF
-            )  # numpy takes 32-bit seed only
+        pl_worker_init_function(worker_id=worker_id, rank=rank)
 
         # Get worker dataset
         worker_info = get_worker_info()
@@ -504,6 +488,10 @@ def main(
         dataset=logging_dataset,
         batch_size=experiment_cfg.data_module_args.batch_size,
         num_workers=experiment_cfg.data_module_args.num_workers,
+        sampler=sampler,
+        generator=torch.Generator().manual_seed(
+            experiment_cfg.data_module_args.data_seed
+        ),
         worker_init_fn=worker_init_function_with_logging,
     )
 
