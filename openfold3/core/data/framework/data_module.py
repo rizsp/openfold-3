@@ -346,16 +346,21 @@ class DataModule(pl.LightningDataModule):
             )
 
     @property
-    def world_size(self):
-        # Get world size
-        # Not necessary when running in isolation from pl.Trainer (i.e. unit tests)
-        return self.trainer.world_size if self.trainer is not None else None
+    def current_epoch(self):
+        # Get current epoch
+        return self.trainer.current_epoch if self.trainer is not None else 0
 
     @property
     def global_rank(self):
         # Get global rank
         # Not necessary when running in isolation from pl.Trainer (i.e. unit tests)
         return self.trainer.global_rank if self.trainer is not None else None
+
+    @property
+    def world_size(self):
+        # Get world size
+        # Not necessary when running in isolation from pl.Trainer (i.e. unit tests)
+        return self.trainer.world_size if self.trainer is not None else None
 
     def init_datasets(
         self, multi_dataset_config: MultiDatasetConfig, set_world_size: bool = False
@@ -448,6 +453,7 @@ class DataModule(pl.LightningDataModule):
             rank=self.global_rank,
             seed=self.data_seed,
         )
+        sampler.set_epoch(self.current_epoch)
         return self.generate_dataloader(DatasetMode.train, sampler=sampler)
 
     def val_dataloader(self) -> DataLoader:
