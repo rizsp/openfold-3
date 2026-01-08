@@ -164,7 +164,7 @@ model_config = mlc.ConfigDict(
                 "c_z": c_z,
                 "num_recycles": 3,
                 "sync_rollout_use_emb": False,
-                "use_confidence_emb_prob": 1.0,  # Change to 0.8 after confirming
+                "use_confidence_emb_prob": 1.0,
                 "diffusion": {
                     "sigma_data": sigma_data,
                     "no_samples": 48,
@@ -172,7 +172,7 @@ model_config = mlc.ConfigDict(
                     "no_full_rollout_samples": 5,
                     "no_mini_rollout_steps": 20,
                     "no_full_rollout_steps": 200,
-                    "use_conditioning_prob": 1.0,  # Change to 0.8 after confirming
+                    "use_conditioning_prob": 1.0,
                 },
             },
             "input_embedder": {
