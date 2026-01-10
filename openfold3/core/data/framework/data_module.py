@@ -424,7 +424,7 @@ class DataModule(pl.LightningDataModule):
         else:
             num_workers = self.num_workers
 
-        logger.debug(f"Seeding DataModule {mode} generator with {self.data_seed}")
+        logger.debug(f"Seeding DataModule {mode} generator with {self.next_data_seed}")
         generator = self.generators.get(mode)
         if generator is None:
             generator = torch.Generator().manual_seed(self.next_data_seed)
