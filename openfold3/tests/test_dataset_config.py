@@ -61,7 +61,7 @@ class TestOF3DatasetConfigConstruction:
                     reference_molecule_directory: {tmp_path}
                     template_cache_directory: {tmp_path} 
                     template_structures_directory: {tmp_path} 
-                    template_file_format: npz
+                    template_file_format: cif
                     ccd_file: None 
         """)
         test_yaml_file = tmp_path / "runner.yml"
@@ -101,7 +101,7 @@ class TestOF3DatasetConfigConstruction:
                     "reference_molecule_directory": tmp_path,
                     "template_cache_directory": tmp_path,
                     "template_structures_directory": tmp_path,
-                    "template_file_format": "npz",
+                    "template_file_format": "cif",
                     "ccd_file": None,
                 },
             },
@@ -127,7 +127,7 @@ class TestOF3DatasetConfigConstruction:
                     reference_molecule_directory: {tmp_path}
                     template_cache_directory: {tmp_path} 
                     template_structures_directory: {tmp_path} 
-                    template_file_format: npz
+                    template_file_format: cif
                     ccd_file: None 
         """)
         test_yaml_file = tmp_path / "runner.yml"
@@ -160,7 +160,7 @@ class TestOF3DatasetConfigConstruction:
                     "reference_molecule_directory": tmp_path,
                     "template_cache_directory": tmp_path,
                     "template_structures_directory": tmp_path,
-                    "template_file_format": "npz",
+                    "template_file_format": "cif",
                     "ccd_file": None,
                 },
             },
@@ -185,7 +185,7 @@ class TestOF3DatasetConfigConstruction:
                     target_structures_directory: {tmp_path} 
                     reference_molecule_directory: {tmp_path}
                     template_cache_directory: {tmp_path} 
-                    template_structures_directory: {tmp_path} 
+                    template_structure_array_directory: {tmp_path} 
                     template_file_format: npz
                     ccd_file: None 
         """)
@@ -208,7 +208,7 @@ class TestOF3DatasetConfigConstruction:
                     "target_structure_file_format": "npz",
                     "reference_molecule_directory": tmp_path,
                     "template_cache_directory": tmp_path,
-                    "template_structures_directory": tmp_path,
+                    "template_structure_array_directory": tmp_path,
                     "template_file_format": "npz",
                     "ccd_file": None,
                 },
