@@ -110,7 +110,8 @@ def setup_param_directory(
     """Check and set up the parameter directory."""
 
     # Check if parameters have already been downloaded
-    if ckpt_root_file.exists() and (ckpt_root_file / CHECKPOINT_NAME).exists():
+    ckpt_path = ckpt_root_file.read_text().strip() if ckpt_root_file.exists() else None
+    if ckpt_path and (Path(ckpt_path) / CHECKPOINT_NAME).exists():
         existing_path = Path(ckpt_root_file.read_text().strip())
         logger.info(
             f"OpenFold3 parameters may already be installed at: {existing_path}"
