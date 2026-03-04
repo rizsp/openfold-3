@@ -63,7 +63,8 @@ kernels.md
 :caption: How To Guides
 :hidden: 
 
-Inference
+inference
+training
 precomputed_msa_generation_how_to
 precomputed_msa_how_to
 template_how_to
