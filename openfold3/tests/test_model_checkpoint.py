@@ -17,7 +17,7 @@ import textwrap
 from build.lib.openfold3.entry_points.experiment_runner import TrainingExperimentRunner
 from openfold3.core.utils.checkpoint_loading_utils import load_checkpoint
 from openfold3.entry_points.validator import TrainingExperimentConfig
-import pytest
+import pytest  # noqa: F401  - used for pytest tmp fixture
 import torch
 
 from openfold3.core.loss.loss_module import OpenFold3Loss
