@@ -11,15 +11,15 @@ Steps:
 
 import os
 from pathlib import Path
-from openfold3.core.utils.checkpoint_loading_utils import load_checkpoint
-import torch
+
 import pytorch_lightning as pl
+import torch
+from pytorch_lightning.callbacks import ModelCheckpoint
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-from pytorch_lightning.callbacks import ModelCheckpoint
 
+from openfold3.core.utils.checkpoint_loading_utils import load_checkpoint
 from openfold3.core.utils.exponential_moving_average import ExponentialMovingAverage
-
 
 CHECKPOINT_DIR = Path("./checkpoints_demo")
 EMA_DECAY = 0.999
@@ -79,7 +79,7 @@ def train():
     checkpoint_callback = ModelCheckpoint(
         dirpath=CHECKPOINT_DIR,
         filename="epoch-{epoch:02d}",
-        save_top_k=-1,   # keep all checkpoints
+        save_top_k=-1,  # keep all checkpoints
         every_n_epochs=1,
     )
 
@@ -92,16 +92,14 @@ def train():
 
     trainer.fit(model, make_dataloader())
 
-    print(f"\nSaved checkpoints:")
+    print("\nSaved checkpoints:")
     for f in sorted(os.listdir(CHECKPOINT_DIR)):
         print(f"  {f}")
 
 
 def load_and_inspect():
     print("\n--- Loading checkpoints and reading version + EMA ---")
-    ckpt_files = sorted(
-        f for f in os.listdir(CHECKPOINT_DIR) if f.endswith(".ckpt")
-    )
+    ckpt_files = sorted(f for f in os.listdir(CHECKPOINT_DIR) if f.endswith(".ckpt"))
 
     for fname in ckpt_files:
         path = CHECKPOINT_DIR / fname

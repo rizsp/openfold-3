@@ -17,15 +17,15 @@ import os
 import random
 import warnings
 from datetime import timedelta
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Literal
 
 from lightning_fabric.plugins.collectives.torch_collective import default_pg_timeout
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 from pydantic import BaseModel, field_validator, model_validator
 from pydantic import ConfigDict as PydanticConfigDict
-from packaging.version import Version
-from packaging.specifiers import SpecifierSet
-from importlib.metadata import version
 
 from openfold3.core.data.pipelines.preprocessing.template import (
     TemplatePreprocessorSettings,

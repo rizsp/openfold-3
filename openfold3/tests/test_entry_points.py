@@ -35,9 +35,9 @@ from openfold3.entry_points.experiment_runner import (
 )
 from openfold3.entry_points.parameters import (
     CHECKPOINT_ROOT_FILENAME,
-    CheckpointEntry,
     DEFAULT_CHECKPOINT_NAME,
     OPENFOLD_MODEL_CHECKPOINT_REGISTRY,
+    CheckpointEntry,
 )
 from openfold3.entry_points.validator import (
     InferenceExperimentConfig,
