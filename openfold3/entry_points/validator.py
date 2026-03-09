@@ -17,10 +17,13 @@ import os
 import random
 import warnings
 from datetime import timedelta
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Literal
 
 from lightning_fabric.plugins.collectives.torch_collective import default_pg_timeout
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 from pydantic import BaseModel, field_validator, model_validator
 from pydantic import ConfigDict as PydanticConfigDict
 
@@ -389,13 +392,38 @@ class InferenceExperimentConfig(ExperimentConfig):
     @model_validator(mode="after")
     def validate_ckpt_settings(self):
         """Validates inference_ckpt_path and inference_ckpt name settings."""
+        # Prioritize using checkpoint path when set
         if isinstance(self.inference_ckpt_path, Path):
             if self.inference_ckpt_path.exists():
                 return self
             raise ValueError(
                 f"Provided checkpoint path {self.inference_ckpt_path} does not exist"
             )
-        elif self.inference_ckpt_name is None:
+
+        elif self.inference_ckpt_name is not None:
+            # validate checkpoint name is in registry
+            if self.inference_ckpt_name not in OPENFOLD_MODEL_CHECKPOINT_REGISTRY:
+                raise ValueError(
+                    f"inference_ckpt_name {self.inference_ckpt_name} not found in "
+                    "checkpoint registry. Please select from "
+                    f"{list(OPENFOLD_MODEL_CHECKPOINT_REGISTRY.keys())}."
+                )
+
+            # validate checkpoint name is compatible with current version
+            current_openfold3_version = Version(version("openfold3"))
+            allowed_versions = SpecifierSet(
+                OPENFOLD_MODEL_CHECKPOINT_REGISTRY[
+                    self.inference_ckpt_name
+                ].version_compatibility
+            )
+            if current_openfold3_version not in allowed_versions:
+                raise ValueError(
+                    f"Selected checkpoint {self.inference_ckpt_name} is not compatible"
+                    "with the currently installed OpenFold3 version"
+                    f"{current_openfold3_version}. Allowed versions for this "
+                    f"checkpoint are {allowed_versions}."
+                )
+        else:
             logger.info(
                 "No inference_ckpt_path or inference_ckpt_name provided, "
                 "selecting default checkpoint."
@@ -434,7 +462,8 @@ class InferenceExperimentConfig(ExperimentConfig):
                 f.write(str(param_dir))
 
         path_to_ckpt = (
-            param_dir / OPENFOLD_MODEL_CHECKPOINT_REGISTRY[self.inference_ckpt_name]
+            param_dir
+            / OPENFOLD_MODEL_CHECKPOINT_REGISTRY[self.inference_ckpt_name].file_name
         )
 
         if not path_to_ckpt.exists():
