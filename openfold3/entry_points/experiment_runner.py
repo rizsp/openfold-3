@@ -224,12 +224,7 @@ class ExperimentRunner(ABC):
                 ),
                 timeout=self.pl_trainer_args.distributed_timeout,
             )
-
-            _use_deepspeed_adam = (
-                self.model_config.settings.optimizer.use_deepspeed_adam
-            )
-            if not _use_deepspeed_adam:
-                _strategy.config["zero_force_ds_cpu_optimizer"] = False
+            _strategy.config["zero_force_ds_cpu_optimizer"] = False
 
             return _strategy
 
@@ -844,7 +839,12 @@ class WandbHandler:
 
     @cached_property
     def run_exists(self) -> bool:
-        wandb_ckpt_dir = Path(self.output_dir) / wandb.run.project / wandb.run.id
+        wandb_ckpt_dir = (
+            Path(self.output_dir)
+            / self.wandb_args.project
+            / self.wandb_args.id
+            / "checkpoints"
+        )
         return wandb_ckpt_dir.is_dir() and any(wandb_ckpt_dir.iterdir())
 
     def store_configs(
