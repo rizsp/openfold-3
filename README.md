@@ -77,7 +77,7 @@ For more details on inferences procedures and benchmarking methods, please refer
 
 Performance of OF3p and other models on a diverse set of benchmarks:
 - Protein and RNA monomers from [CASP16](https://www.biorxiv.org/content/10.1101/2025.05.06.652459v2) and [Ludaic et al](https://www.biorxiv.org/content/10.1101/2025.04.30.651414v2)
-- Proein-protein complexes from [CASP16](https://www.biorxiv.org/content/10.1101/2025.05.29.656875v1) and [FoldBench](https://www.biorxiv.org/content/10.1101/2025.05.22.655600v1) 
+- Protein-protein complexes from [CASP16](https://www.biorxiv.org/content/10.1101/2025.05.29.656875v1) and [FoldBench](https://www.biorxiv.org/content/10.1101/2025.05.22.655600v1) 
 - Protein-ligand complexes from the [Runs and Poses](https://www.biorxiv.org/content/10.1101/2025.02.03.636309v3) 
 
 For more details on inferences procedures and benchmarking methods, please refer to the [OpenFold3 Preview whitepaper](assets/whitepaper.pdf).
