@@ -55,7 +55,7 @@ OpenFold3-preview performs competitively with the state of the art in open sourc
 **OpenFold3-preview-2 results:**
 <picture>
   <source srcset="assets/of3p2-benchmarks-rnp.png">
-  <img alt="Runs N' Poses performance of OpenFold3-preview-2 and other models">
+  <img alt="Runs N' Poses performance of OpenFold3-preview-2 and other models" src="assets/of3p2-benchmarks-rnp.png">
 </picture>
 <picture>
   <source srcset="assets/of3p2-benchmarks-fb-interface.png">
@@ -74,10 +74,6 @@ Performance of OF3p2 and other models on a diverse set of benchmarks:
 For more details on inferences procedures and benchmarking methods, please refer to the [OpenFold3 Preview 2 whitepaper](https://portal.openfold.omsf.io/reports/of3p2_technical_report.pdf)
 
 **OpenFold3-preview results:**
-<picture>
-  <source srcset="assets/combined_benchmarks.png">
-  <img alt="Benchmark performance of OpenFold3-preview and other models">
-</picture>
 
 Performance of OF3p and other models on a diverse set of benchmarks:
 - Protein and RNA monomers from [CASP16](https://www.biorxiv.org/content/10.1101/2025.05.06.652459v2) and [Ludaic et al](https://www.biorxiv.org/content/10.1101/2025.04.30.651414v2)
