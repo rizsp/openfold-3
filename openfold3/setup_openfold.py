@@ -132,7 +132,7 @@ def setup_param_directory(
 def download_parameters(param_dir) -> None:
     """Perform the parameter download."""
     # Exclude incompatible checkpoints:
-    legacy_checkpoints = ["openfold-p1"]
+    legacy_checkpoints = ["openfold3-p1"]
     all_checkpoints = [
         name
         for name in OPENFOLD_MODEL_CHECKPOINT_REGISTRY

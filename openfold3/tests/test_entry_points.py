@@ -745,7 +745,7 @@ class TestSetupOpenFold:
             ),
         ):
             setup_openfold.main()
-        
+
         # Check that the checkpoint root file exists and has the expected path
         assert (tmp_path / CHECKPOINT_ROOT_FILENAME).exists()
         assert (tmp_path / CHECKPOINT_ROOT_FILENAME).read_text() == str(tmp_path)
@@ -753,6 +753,5 @@ class TestSetupOpenFold:
         expected_checkpoints = ["openfold3-p2-145k", "openfold3-p2-155k"]
         for ckpt_name in expected_checkpoints:
             assert (
-                tmp_path
-                / OPENFOLD_MODEL_CHECKPOINT_REGISTRY[ckpt_name].file_name
+                tmp_path / OPENFOLD_MODEL_CHECKPOINT_REGISTRY[ckpt_name].file_name
             ).exists()
