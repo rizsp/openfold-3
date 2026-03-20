@@ -51,7 +51,6 @@ class TestPredictionWriter:
 
         output_writer = OF3OutputWriter(
             output_dir=tmp_path,
-            pae_enabled=False,
             structure_format=structure_format,
             full_confidence_output_format="json",
         )
@@ -88,59 +87,7 @@ class TestPredictionWriter:
         ["json", "npz"],
         ids=lambda x: x,
     )
-    def test_confidence_writer_without_pae(
-        self, tmp_path, output_fmt, dummy_atom_array
-    ):
-        n_tokens = 3
-        n_atoms = 5
-        dummy_atom_array.chain_id = np.array(["A", "A", "B", "B", "B"])
-
-        confidence_scores = {
-            "plddt": np.random.uniform(size=n_atoms),
-            "pde_probs": np.random.uniform(size=(n_tokens, n_tokens, 64)),
-            "pde": np.random.uniform(size=(n_tokens, n_tokens)),
-            "gpde": np.float32(16.2),
-        }
-
-        writer = OF3OutputWriter(
-            output_dir=tmp_path,
-            pae_enabled=False,
-            full_confidence_output_format=output_fmt,
-        )
-        output_prefix = tmp_path / "test"
-        writer.write_confidence_scores(
-            confidence_scores, dummy_atom_array, output_prefix
-        )
-
-        # Check aggregated confidence scores
-        expected_agg_scores = {
-            "avg_plddt": np.mean(confidence_scores["plddt"]),
-            "gpde": confidence_scores["gpde"],
-        }
-        out_file_agg = Path(f"{output_prefix}_confidences_aggregated.json")
-        actual_agg_scores = json.loads(out_file_agg.read_text())
-        assert expected_agg_scores == actual_agg_scores
-
-        # Check full confidence scores:
-        expected_full_scores = {
-            "plddt": confidence_scores["plddt"],
-            "pde": confidence_scores["pde"],
-        }
-        out_file_full = Path(f"{output_prefix}_confidences.{output_fmt}")
-        actual_full_scores = self._load_full_confidence_scores(out_file_full)
-
-        for k in expected_full_scores:
-            assert k in actual_full_scores, f"Key {k} not found in actual scores"
-            np.testing.assert_array_equal(
-                expected_full_scores[k], actual_full_scores[k]
-            )
-
-    @pytest.mark.parametrize(
-        "output_fmt",
-        ["json", "npz"],
-        ids=lambda x: x,
-    )
-    def test_confidence_writer_with_pae(self, tmp_path, output_fmt, dummy_atom_array):
+    def test_confidence_writer(self, tmp_path, output_fmt, dummy_atom_array):
         n_tokens = 3
         n_atoms = 5
         dummy_atom_array.chain_id = np.array(["A", "A", "B", "B", "B"])
@@ -171,7 +118,6 @@ class TestPredictionWriter:
 
         output_writer = OF3OutputWriter(
             output_dir=tmp_path,
-            pae_enabled=True,
             full_confidence_output_format=output_fmt,
         )
 

@@ -279,47 +279,6 @@ class TestModelUpdate:
         # Verify settings from model_update section are also applied
         assert model_config.architecture.shared.num_recycles == 1
 
-    @pytest.mark.skip(
-        reason="PAE head is enabled by default for now. "
-        "Test will be removed in the future."
-    )
-    def test_pae_disabled_if_preset_not_selected(self, tmp_path, dummy_ckpt_file):
-        """Test pae not set if only predict preset specified experiment runner."""
-        test_yaml_str = textwrap.dedent("""\
-            model_update:
-              presets: 
-                - predict
-        """)
-        test_yaml_file = tmp_path / "runner.yml"
-        test_yaml_file.write_text(test_yaml_str)
-        expt_config = InferenceExperimentConfig(
-            inference_ckpt_path=dummy_ckpt_file,
-            **config_utils.load_yaml(test_yaml_file),
-        )
-        expt_runner = InferenceExperimentRunner(expt_config)
-        assert not expt_runner.pae_enabled, "Expected pae_head not to be enabled."
-
-    @pytest.mark.skip(
-        reason="PAE head is enabled by default for now. "
-        "Test will be removed in the future."
-    )
-    def test_pae_enabled(self, tmp_path, dummy_ckpt_file):
-        """Test pae enabled updates experiment runner."""
-        test_yaml_str = textwrap.dedent("""\
-            model_update:
-              presets: 
-                - predict
-                - pae_enabled
-        """)
-        test_yaml_file = tmp_path / "runner.yml"
-        test_yaml_file.write_text(test_yaml_str)
-        expt_config = InferenceExperimentConfig(
-            inference_ckpt_path=dummy_ckpt_file,
-            **config_utils.load_yaml(test_yaml_file),
-        )
-        expt_runner = InferenceExperimentRunner(expt_config)
-        assert expt_runner.pae_enabled
-
     def test_low_mem_model_config_preset(self, tmp_path, dummy_ckpt_file):
         test_dummy_file = tmp_path / "test.json"
         test_dummy_file.write_text("test")
