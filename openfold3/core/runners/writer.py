@@ -193,8 +193,7 @@ class OF3OutputWriter(BasePredictionWriter):
         )
 
         # Full confidence scores
-        if self.write_full_confidence_scores is True: 
-
+        if self.write_full_confidence_scores is True:
             full_confidence_scores = {"plddt": plddt, "pde": pde, "pae": pae}
             out_fmt = self.full_confidence_format
             out_file_full = Path(f"{output_prefix}_confidences.{out_fmt}")

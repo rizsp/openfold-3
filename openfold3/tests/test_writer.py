@@ -111,7 +111,6 @@ class TestPredictionWriter:
                 actual_full_scores = np.load(output_file_path)
         return actual_full_scores
 
-
     def write_confidence_scores(
         self, output_path, output_fmt, write_full_output, confidence_scores
     ):
@@ -129,14 +128,13 @@ class TestPredictionWriter:
             confidence_scores, atom_array, output_prefix
         )
 
-    
     @pytest.mark.parametrize(
         "output_fmt",
         ["json", "npz"],
         ids=lambda x: x,
     )
     def test_full_confidence_scores_written(
-        self, tmp_path, output_fmt, dummy_confidence_scores 
+        self, tmp_path, output_fmt, dummy_confidence_scores
     ):
 
         self.write_confidence_scores(
@@ -175,14 +173,14 @@ class TestPredictionWriter:
             np.testing.assert_array_equal(
                 expected_full_scores[k], actual_full_scores[k]
             )
-    
+
     def test_skip_full_confidence_scores(self, tmp_path, dummy_confidence_scores):
-        self.write_confidence_scores(
-            tmp_path, "json", False, dummy_confidence_scores
-        )
-        expected_output_contents = [tmp_path/"test_confidences_aggregated.json"]
+        self.write_confidence_scores(tmp_path, "json", False, dummy_confidence_scores)
+        expected_output_contents = [tmp_path / "test_confidences_aggregated.json"]
         actual_output_contents = [f for f in tmp_path.glob("*")]
-        assert expected_output_contents == actual_output_contents, "Only aggregated confidence scores file should be written"
+        assert expected_output_contents == actual_output_contents, (
+            "Only aggregated confidence scores file should be written"
+        )
 
     def test_skips_none_output(self, tmp_path):
         class DummyMock:
