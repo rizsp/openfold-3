@@ -77,6 +77,7 @@ class OF3OutputWriter(BasePredictionWriter):
         full_confidence_output_format: str = "json",
         write_features: bool = False,
         write_latent_outputs: bool = False,
+        write_full_confidence_scores: bool = True,
     ):
         super().__init__(write_interval="batch")
         self.output_dir = output_dir
@@ -84,6 +85,7 @@ class OF3OutputWriter(BasePredictionWriter):
         self.full_confidence_format = full_confidence_output_format
         self.write_features = write_features
         self.write_latent_outputs = write_latent_outputs
+        self.write_full_confidence_scores = write_full_confidence_scores
 
         # Track successfully predicted samples
         self.success_count = 0
@@ -191,20 +193,22 @@ class OF3OutputWriter(BasePredictionWriter):
         )
 
         # Full confidence scores
-        full_confidence_scores = {"plddt": plddt, "pde": pde, "pae": pae}
-        out_fmt = self.full_confidence_format
-        out_file_full = Path(f"{output_prefix}_confidences.{out_fmt}")
+        if self.write_full_confidence_scores is True: 
 
-        if out_fmt == "json":
-            out_file_full.write_text(
-                json.dumps(
-                    full_confidence_scores,
-                    indent=4,
-                    cls=NumpyEncoder,
+            full_confidence_scores = {"plddt": plddt, "pde": pde, "pae": pae}
+            out_fmt = self.full_confidence_format
+            out_file_full = Path(f"{output_prefix}_confidences.{out_fmt}")
+
+            if out_fmt == "json":
+                out_file_full.write_text(
+                    json.dumps(
+                        full_confidence_scores,
+                        indent=4,
+                        cls=NumpyEncoder,
+                    )
                 )
-            )
-        elif out_fmt == "npz":
-            np.savez_compressed(out_file_full, **full_confidence_scores)
+            elif out_fmt == "npz":
+                np.savez_compressed(out_file_full, **full_confidence_scores)
 
     def write_all_outputs(self, batch: dict, outputs: dict, confidence_scores: dict):
         """Writes all outputs for a given batch."""

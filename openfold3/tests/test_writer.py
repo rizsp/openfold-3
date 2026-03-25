@@ -16,11 +16,40 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pytest  # noqa: F401  - used for pytest tmp fixture
+import pytest
 from biotite import structure
 from biotite.structure.io import pdb, pdbx
 
 from openfold3.core.runners.writer import OF3OutputWriter
+
+
+@pytest.fixture
+def dummy_confidence_scores():
+    n_tokens = 3
+    n_atoms = 5
+    return {
+        "plddt": np.random.uniform(size=n_atoms),
+        "pde_probs": np.random.uniform(size=(n_tokens, n_tokens, 64)),
+        "pde": np.random.uniform(size=(n_tokens, n_tokens)),
+        "gpde": np.random.uniform(size=(1,)),
+        "pae_probs": np.random.uniform(size=(n_tokens, n_tokens, 64)),
+        "pae": np.random.uniform(size=(n_tokens, n_tokens)),
+        "iptm": np.random.uniform(size=(1,)),
+        "ptm": np.random.uniform(size=(1,)),
+        "disorder": np.random.uniform(size=(1,)),
+        "has_clash": np.float32(0.0),
+        "sample_ranking_score": np.random.uniform(size=(1,)),
+        "chain_ptm": {
+            "1": np.random.uniform(size=(1,)),
+            "2": np.random.uniform(size=(1,)),
+        },
+        "chain_pair_iptm": {
+            "(1, 2)": np.random.uniform(size=(1,)),
+        },
+        "bespoke_iptm": {
+            "(1, 2)": np.random.uniform(size=(1,)),
+        },
+    }
 
 
 class TestPredictionWriter:
@@ -82,50 +111,40 @@ class TestPredictionWriter:
                 actual_full_scores = np.load(output_file_path)
         return actual_full_scores
 
+
+    def write_confidence_scores(
+        self, output_path, output_fmt, write_full_output, confidence_scores
+    ):
+        atom_array = structure.AtomArray(5)
+        atom_array.coord = np.zeros((5, 3))
+        atom_array.chain_id = np.array(["A", "A", "B", "B", "B"])
+
+        output_writer = OF3OutputWriter(
+            output_dir=output_path,
+            full_confidence_output_format=output_fmt,
+            write_full_confidence_scores=write_full_output,
+        )
+        output_prefix = output_path / "test"
+        output_writer.write_confidence_scores(
+            confidence_scores, atom_array, output_prefix
+        )
+
+    
     @pytest.mark.parametrize(
         "output_fmt",
         ["json", "npz"],
         ids=lambda x: x,
     )
-    def test_confidence_writer(self, tmp_path, output_fmt, dummy_atom_array):
-        n_tokens = 3
-        n_atoms = 5
-        dummy_atom_array.chain_id = np.array(["A", "A", "B", "B", "B"])
+    def test_full_confidence_scores_written(
+        self, tmp_path, output_fmt, dummy_confidence_scores 
+    ):
 
-        confidence_scores = {
-            "plddt": np.random.uniform(size=n_atoms),
-            "pde_probs": np.random.uniform(size=(n_tokens, n_tokens, 64)),
-            "pde": np.random.uniform(size=(n_tokens, n_tokens)),
-            "gpde": np.random.uniform(size=(1,)),
-            "pae_probs": np.random.uniform(size=(n_tokens, n_tokens, 64)),
-            "pae": np.random.uniform(size=(n_tokens, n_tokens)),
-            "iptm": np.random.uniform(size=(1,)),
-            "ptm": np.random.uniform(size=(1,)),
-            "disorder": np.random.uniform(size=(1,)),
-            "has_clash": np.float32(0.0),
-            "sample_ranking_score": np.random.uniform(size=(1,)),
-            "chain_ptm": {
-                "1": np.random.uniform(size=(1,)),
-                "2": np.random.uniform(size=(1,)),
-            },
-            "chain_pair_iptm": {
-                "(1, 2)": np.random.uniform(size=(1,)),
-            },
-            "bespoke_iptm": {
-                "(1, 2)": np.random.uniform(size=(1,)),
-            },
-        }
-
-        output_writer = OF3OutputWriter(
-            output_dir=tmp_path,
-            full_confidence_output_format=output_fmt,
+        self.write_confidence_scores(
+            tmp_path, output_fmt, True, dummy_confidence_scores
         )
 
         output_prefix = tmp_path / "test"
-        output_writer.write_confidence_scores(
-            confidence_scores, dummy_atom_array, output_prefix
-        )
-
+        out_file_full = Path(f"{output_prefix}_confidences.{output_fmt}")
         expected_agg_score_keys = [
             "avg_plddt",
             "gpde",
@@ -145,11 +164,10 @@ class TestPredictionWriter:
 
         # Check full confidence scores:
         expected_full_scores = {
-            "plddt": confidence_scores["plddt"],
-            "pde": confidence_scores["pde"],
-            "pae": confidence_scores["pae"],
+            "plddt": dummy_confidence_scores["plddt"],
+            "pde": dummy_confidence_scores["pde"],
+            "pae": dummy_confidence_scores["pae"],
         }
-        out_file_full = Path(f"{output_prefix}_confidences.{output_fmt}")
         actual_full_scores = self._load_full_confidence_scores(out_file_full)
 
         for k in expected_full_scores:
@@ -157,6 +175,14 @@ class TestPredictionWriter:
             np.testing.assert_array_equal(
                 expected_full_scores[k], actual_full_scores[k]
             )
+    
+    def test_skip_full_confidence_scores(self, tmp_path, dummy_confidence_scores):
+        self.write_confidence_scores(
+            tmp_path, "json", False, dummy_confidence_scores
+        )
+        expected_output_contents = [tmp_path/"test_confidences_aggregated.json"]
+        actual_output_contents = [f for f in tmp_path.glob("*")]
+        assert expected_output_contents == actual_output_contents, "Only aggregated confidence scores file should be written"
 
     def test_skips_none_output(self, tmp_path):
         class DummyMock:

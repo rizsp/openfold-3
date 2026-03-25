@@ -162,6 +162,7 @@ class OutputWritingSettings(BaseModel):
     full_confidence_output_format: Literal["json", "npz"] = "json"
     write_features: bool = False
     write_latent_outputs: bool = False
+    write_full_confidence_scores: bool = True
 
 
 class ExperimentSettings(BaseModel):
