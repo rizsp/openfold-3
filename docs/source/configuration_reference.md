@@ -131,6 +131,10 @@ data_module_args:
 ```
 
 ---
+### 3.X Checkpoint Confiugration (`checkpoint_config`)
+
+Configures Checkpoint writing settings, which are passed to [pl.ModelCheckpoint callback](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html). 
+
 
 ### 3.6. Dataset Config Kwargs (`dataset_config_kwargs`)
 
