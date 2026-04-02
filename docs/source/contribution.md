@@ -6,36 +6,42 @@ Thank you for taking the time to learn how to contribute to OpenFold\! OpenFold 
 
 To make a contribution, you should first set up your repository, then submit a pull request of the changes you want to make. Below are the steps to setup the openfold3 repository locally.
 
-1. Set up your repository:  
-    1. Make a personal fork of the openfold-3 repository.  
-    2. Clone openfold-3.   
-    3. If you already have a fork, make sure to pull to get the latest changes, e.g.
+1. Set up your repository:
 
-        ```shell
-        git fetch origin && git pull origin main
-        ```
+   ::::{admonition} Instructions
+   1. Make a personal fork of the openfold-3 repository.
+   2. Clone openfold-3.
+   3. If you already have a fork, make sure to pull to get the latest changes, e.g.
 
-    4. Install openfold3 locally, using
+      ```shell
+      git fetch origin && git pull origin main
+      ```
 
-        ```shell
-        pip install .[dev]
-        ```
+   4. Install openfold3 locally, using
 
-    5. Setup OpenFold3. Make sure to run the full integration tests and that these tests pass. Also run all the unit tests and make sure the unit tests pass.
+      ```shell
+      pip install .[dev]
+      ```
 
-        ```shell
-        $ setup_openfold
-        $ pytest openfold3/tests/*
-        ```
+   5. Setup OpenFold3. Make sure to run the full integration tests and that these tests pass. Also run all the unit tests and make sure the unit tests pass.
+
+      ```shell
+      $ setup_openfold
+      $ pytest openfold3/tests/*
+      ```
+   ::::
 
 2. Write the changes you want to make. See [\#good-first-issues](https://github.com/aqlaboratory/openfold-3/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22) for some ideas of where to start.  
-3. Test your changes  
-   1. Include unit tests to test your changes. If you have limited experience writing tests, we can help. A good starting point is to convert the examples that you used to verify that your changes work into individual test cases  
+3. Test your changes
+
+   ::::{admonition} Instructions
+   1. Include unit tests to test your changes. If you have limited experience writing tests, we can help. A good starting point is to convert the examples that you used to verify that your changes work into individual test cases
    2. Run all the unit tests, make sure they pass
 
-        ```
-        pytest openfold3/tests/*
-        ```
+      ```
+      pytest openfold3/tests/*
+      ```
+   ::::
 
 4. Format the changes. In the OpenFold project, we use Ruff as our Linting tool. You can run ruff in the same environment with.
 
