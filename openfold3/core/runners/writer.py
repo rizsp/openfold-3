@@ -76,7 +76,7 @@ class OF3OutputWriter(BasePredictionWriter):
         output_dir: Path,
         structure_format: str = "pdb",
         full_confidence_output_format: str = "json",
-        full_confidence_output_dtype: Literal["float32", "float16"] = "float32",
+        full_confidence_output_dtype: Literal["float32", "float16"] = "float16",
         write_features: bool = False,
         write_latent_outputs: bool = False,
         write_full_confidence_scores: bool = True,
