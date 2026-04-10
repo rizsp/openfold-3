@@ -39,8 +39,16 @@ class NumpyEncoder(json.JSONEncoder):
 
     def default(self, obj):
         if isinstance(obj, np.ndarray):
+            if obj.dtype == np.float16:
+                return obj.astype(np.float64).round(3).tolist()
+            elif obj.dtype == np.float32:
+                return obj.astype(np.float64).round(6).tolist()
             return obj.tolist()
         elif isinstance(obj, np.generic):
+            if obj.dtype == np.float16:
+                return round(obj.item(), 3)
+            elif obj.dtype == np.float32:
+                return round(obj.item(), 6)
             return obj.item()
         return super().default(obj)
 

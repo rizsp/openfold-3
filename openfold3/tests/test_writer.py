@@ -28,27 +28,31 @@ from openfold3.core.runners.writer import OF3OutputWriter
 def dummy_confidence_scores():
     n_tokens = 3
     n_atoms = 5
+
+    def rand(*shape):
+        return np.random.uniform(size=shape).astype(np.float32)
+
     return {
-        "plddt": np.random.uniform(size=n_atoms),
-        "pde_probs": np.random.uniform(size=(n_tokens, n_tokens, 64)),
-        "pde": np.random.uniform(size=(n_tokens, n_tokens)),
-        "gpde": np.random.uniform(size=(1,)),
-        "pae_probs": np.random.uniform(size=(n_tokens, n_tokens, 64)),
-        "pae": np.random.uniform(size=(n_tokens, n_tokens)),
-        "iptm": np.random.uniform(size=(1,)),
-        "ptm": np.random.uniform(size=(1,)),
-        "disorder": np.random.uniform(size=(1,)),
+        "plddt": rand(n_atoms),
+        "pde_probs": rand(n_tokens, n_tokens, 64),
+        "pde": rand(n_tokens, n_tokens),
+        "gpde": rand(1),
+        "pae_probs": rand(n_tokens, n_tokens, 64),
+        "pae": rand(n_tokens, n_tokens),
+        "iptm": rand(1),
+        "ptm": rand(1),
+        "disorder": rand(1),
         "has_clash": np.float32(0.0),
-        "sample_ranking_score": np.random.uniform(size=(1,)),
+        "sample_ranking_score": rand(1),
         "chain_ptm": {
-            "1": np.random.uniform(size=(1,)),
-            "2": np.random.uniform(size=(1,)),
+            "1": rand(1),
+            "2": rand(1),
         },
         "chain_pair_iptm": {
-            "(1, 2)": np.random.uniform(size=(1,)),
+            "(1, 2)": rand(1),
         },
         "bespoke_iptm": {
-            "(1, 2)": np.random.uniform(size=(1,)),
+            "(1, 2)": rand(1),
         },
     }
 
@@ -181,8 +185,9 @@ class TestPredictionWriter:
 
         for k in expected_full_scores:
             assert k in actual_full_scores, f"Key {k} not found in actual scores"
+            expected_decimal = 3 if output_dtype == "float16" else 6
             np.testing.assert_array_almost_equal(
-                expected_full_scores[k], actual_full_scores[k], decimal=3
+                expected_full_scores[k], actual_full_scores[k], decimal=expected_decimal
             )
             if output_fmt == "npz":
                 assert actual_full_scores[k].dtype == np.dtype(output_dtype), (
